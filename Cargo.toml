@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "axis-color",
+    "axis-image",
+    "axis-math",
+]

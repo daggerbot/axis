@@ -1,0 +1,83 @@
+/*
+ * Copyright (c) 2022 Martin Mills <daggerbot@gmail.com>
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+use std::ops::Deref;
+
+use math::Vector2;
+
+use crate::image::{Image, OutOfBounds};
+
+/// Invokes a callback with the corresponding pixel from an existing image for each pixel requested.
+pub struct Map<'a, I: 'a + ?Sized + Image, T: 'a, F: Fn(I::Pixel<'a>) -> T> {
+    pub(crate) callback: F,
+    pub(crate) parent: &'a I,
+}
+
+impl<'a, I: 'a + Image, T: 'a, F: Fn(I::Pixel<'a>) -> T> Image for Map<'a, I, T, F> {
+    type Pixel<'b> = T where Self: 'b;
+
+    unsafe fn pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
+        (self.callback)(self.parent.pixel_unchecked(pos))
+    }
+
+    fn size(&self) -> Vector2<usize> { self.parent.size() }
+
+    fn try_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
+        Ok((self.callback)(self.parent.try_pixel(pos)?))
+    }
+}
+
+/// Clones the values referenced by the parent image.
+pub struct Cloned<'a, T: 'a + Clone, I: 'a + ?Sized + Image>
+where
+    <I as Image>::Pixel<'a>: Deref<Target = T>,
+{
+    pub(crate) parent: &'a I,
+}
+
+impl<'a, T: 'a + Clone, I: 'a + Image> Image for Cloned<'a, T, I>
+where
+    <I as Image>::Pixel<'a>: Deref<Target = T>,
+{
+    type Pixel<'b> = T where Self: 'b;
+
+    unsafe fn pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
+        self.parent.pixel_unchecked(pos).clone()
+    }
+
+    fn size(&self) -> Vector2<usize> { self.parent.size() }
+
+    fn try_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
+        Ok(self.parent.try_pixel(pos)?.clone())
+    }
+}
+
+/// Copies the values referenced by the parent image.
+pub struct Copied<'a, T: 'a + Copy, I: 'a + ?Sized + Image>
+where
+    <I as Image>::Pixel<'a>: Deref<Target = T>,
+{
+    pub(crate) parent: &'a I,
+}
+
+impl<'a, T: 'a + Copy, I: 'a + Image> Image for Copied<'a, T, I>
+where
+    <I as Image>::Pixel<'a>: Deref<Target = T>,
+{
+    type Pixel<'b> = T where Self: 'b;
+
+    unsafe fn pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
+        *self.parent.pixel_unchecked(pos)
+    }
+
+    fn size(&self) -> Vector2<usize> { self.parent.size() }
+
+    fn try_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
+        Ok(*self.parent.try_pixel(pos)?)
+    }
+}
