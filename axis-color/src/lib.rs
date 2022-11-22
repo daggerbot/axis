@@ -12,6 +12,9 @@ extern crate axis_math as math;
 extern crate serde;
 extern crate core as std;
 
+#[macro_use]
+mod macros;
+
 mod alpha;
 mod color;
 mod component;

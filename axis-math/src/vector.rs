@@ -19,7 +19,16 @@ use std::ops::{
     SubAssign,
 };
 
-use crate::convert::TryFromComposite;
+use crate::complex::Complex;
+use crate::convert::{
+    FromComposite,
+    FromCompositeLossy,
+    IntoComposite,
+    IntoCompositeLossy,
+    IntoLossy,
+    TryFromComposite,
+    TryIntoComposite,
+};
 use crate::num::{Identity, Zero};
 use crate::try_ops::{TryAdd, TryDiv, TryMul, TryNeg, TrySub};
 use crate::wrapping_ops::{WrappingAdd, WrappingMul, WrappingSub};
@@ -36,6 +45,10 @@ impl<T: Display> Display for Vector2<T> {
     fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
         write!(fmt, "({}, {})", self.x, self.y)
     }
+}
+
+impl<T> From<Complex<T>> for Vector2<T> {
+    fn from(v: Complex<T>) -> Vector2<T> { Vector2::new(v.0, v.1) }
 }
 
 /// 3-dimensional vector type.
@@ -173,7 +186,7 @@ macro_rules! impl_scalar_assign_ops {
 }
 
 macro_rules! impl_vector_ops {
-    { $(impl $trait:ident::$fn:ident for $vector:ident($($field:ident),*);)* } => { $(
+    { $(impl $trait:ident::$fn:ident for $vector:ident($($field:ident: $T:ident),*);)* } => { $(
         impl<T> $trait for $vector<T>
         where
             T: $trait,
@@ -217,11 +230,35 @@ macro_rules! impl_vector_ops {
                 $vector { $($field: $trait::$fn(&self.$field, &rhs.$field)),* }
             }
         }
+
+        impl<T> $trait<($($T),*)> for $vector<T>
+        where
+            T: $trait,
+        {
+            type Output = $vector<<T as $trait>::Output>;
+
+            fn $fn(self, rhs: ($($T),*)) -> Self::Output {
+                let ($($field),*) = rhs;
+                $vector { $($field: $trait::$fn(self.$field, $field)),* }
+            }
+        }
+
+        impl<'a, T> $trait<($($T),*)> for &'a $vector<T>
+        where
+            &'a T: $trait<T>,
+        {
+            type Output = $vector<<&'a T as $trait<T>>::Output>;
+
+            fn $fn(self, rhs: ($($T),*)) -> Self::Output {
+                let ($($field),*) = rhs;
+                $vector { $($field: $trait::$fn(&self.$field, $field)),* }
+            }
+        }
     )* };
 }
 
 macro_rules! impl_vector_assign_ops {
-    { $(impl $trait:ident::$fn:ident for $vector:ident($($field:ident),*);)* } => { $(
+    { $(impl $trait:ident::$fn:ident for $vector:ident($($field:ident: $T:ident),*);)* } => { $(
         impl<T> $trait for $vector<T>
         where
             T: $trait,
@@ -237,6 +274,16 @@ macro_rules! impl_vector_assign_ops {
         {
             fn $fn(&mut self, rhs: &'r $vector<T>) {
                 $($trait::$fn(&mut self.$field, &rhs.$field);)*
+            }
+        }
+
+        impl<T> $trait<($($T),*)> for $vector<T>
+        where
+            T: $trait,
+        {
+            fn $fn(&mut self, rhs: ($($T),*)) {
+                let ($($field),*) = rhs;
+                $($trait::$fn(&mut self.$field, $field);)*
             }
         }
     )* };
@@ -479,6 +526,31 @@ macro_rules! impl_all {
             pub const fn new($($field: T),*) -> $vector<T> {
                 $vector { $($field),* }
             }
+
+            /// Converts into another scalar type.
+            pub fn to<U>(self) -> $vector<U>
+            where
+                T: Into<U>,
+            {
+                self.into_composite()
+            }
+
+            /// Converts into another scalar type, typically by using the `as` operator for each
+            /// scalar.
+            pub fn to_lossy<U>(self) -> $vector<U>
+            where
+                T: IntoLossy<U>,
+            {
+                self.into_composite_lossy()
+            }
+
+            /// Checked conversion into another scalar type.
+            pub fn try_to<U>(self) -> Result<$vector<U>, T::Error>
+            where
+                T: TryInto<U>,
+            {
+                self.try_into_composite()
+            }
         }
 
         impl<T> From<[T; $n]> for $vector<T> {
@@ -493,6 +565,18 @@ macro_rules! impl_all {
             fn from(t: ($($T),*)) -> $vector<T> {
                 let ($($field),*) = t;
                 $vector { $($field),* }
+            }
+        }
+
+        impl<T, F: Into<T>> FromComposite<$vector<F>> for $vector<T> {
+            fn from_composite(from: $vector<F>) -> $vector<T> {
+                $vector { $($field: from.$field.into()),* }
+            }
+        }
+
+        impl<T, F: IntoLossy<T>> FromCompositeLossy<$vector<F>> for $vector<T> {
+            fn from_composite_lossy(from: $vector<F>) -> $vector<T> {
+                $vector { $($field: from.$field.into_lossy()),* }
             }
         }
 
@@ -554,17 +638,17 @@ macro_rules! impl_all {
         }
 
         impl_vector_ops! {
-            impl Add::add for $vector($($field),*);
-            impl Div::div for $vector($($field),*);
-            impl Mul::mul for $vector($($field),*);
-            impl Sub::sub for $vector($($field),*);
+            impl Add::add for $vector($($field: $T),*);
+            impl Div::div for $vector($($field: $T),*);
+            impl Mul::mul for $vector($($field: $T),*);
+            impl Sub::sub for $vector($($field: $T),*);
         }
 
         impl_vector_assign_ops! {
-            impl AddAssign::add_assign for $vector($($field),*);
-            impl DivAssign::div_assign for $vector($($field),*);
-            impl MulAssign::mul_assign for $vector($($field),*);
-            impl SubAssign::sub_assign for $vector($($field),*);
+            impl AddAssign::add_assign for $vector($($field: $T),*);
+            impl DivAssign::div_assign for $vector($($field: $T),*);
+            impl MulAssign::mul_assign for $vector($($field: $T),*);
+            impl SubAssign::sub_assign for $vector($($field: $T),*);
         }
 
         impl_unary_try_ops! {

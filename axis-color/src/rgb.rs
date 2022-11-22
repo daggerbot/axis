@@ -6,6 +6,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+
 use crate::color::{Color, FromColor, FromColorLossy};
 use crate::component::{Component, IntoComponent, IntoComponentLossy};
 use crate::lum::{Lum, LumAlpha};
@@ -68,6 +70,20 @@ impl<T, F: IntoComponentLossy<T>> FromColorLossy<Rgba<F>> for Red<T> {
             r: other.r.into_component_lossy(),
         }
     }
+}
+
+impl_scalar_ops! {
+    impl Add::add for Red(r);
+    impl Div::div for Red(r);
+    impl Mul::mul for Red(r);
+    impl Sub::sub for Red(r);
+}
+
+impl_scalar_assign_ops! {
+    impl AddAssign::add_assign for Red(r);
+    impl DivAssign::div_assign for Red(r);
+    impl MulAssign::mul_assign for Red(r);
+    impl SubAssign::sub_assign for Red(r);
 }
 
 /// Red-green color type.
@@ -151,6 +167,16 @@ impl<T, F: IntoComponentLossy<T>> FromColorLossy<Rgba<F>> for Rg<T> {
 
 impl<T> Into<(T, T)> for Rg<T> {
     fn into(self) -> (T, T) { (self.r, self.g) }
+}
+
+impl_scalar_ops! {
+    impl Div::div for Rg(r, g);
+    impl Mul::mul for Rg(r, g);
+}
+
+impl_scalar_assign_ops! {
+    impl DivAssign::div_assign for Rg(r, g);
+    impl MulAssign::mul_assign for Rg(r, g);
 }
 
 /// Red-green-blue color type.
@@ -252,6 +278,16 @@ impl<T, F: IntoComponentLossy<T>> FromColorLossy<Rgba<F>> for Rgb<T> {
 
 impl<T> Into<(T, T, T)> for Rgb<T> {
     fn into(self) -> (T, T, T) { (self.r, self.g, self.b) }
+}
+
+impl_scalar_ops! {
+    impl Div::div for Rgb(r, g, b);
+    impl Mul::mul for Rgb(r, g, b);
+}
+
+impl_scalar_assign_ops! {
+    impl DivAssign::div_assign for Rgb(r, g, b);
+    impl MulAssign::mul_assign for Rgb(r, g, b);
 }
 
 /// Red-green-blue-alpha color type.

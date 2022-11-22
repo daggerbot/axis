@@ -6,6 +6,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+
 use crate::color::{Color, FromColor, FromColorLossy};
 use crate::component::{IntoComponent, IntoComponentLossy};
 use crate::rgb::Rgba;
@@ -71,4 +73,18 @@ impl<T> IntoIterator for Alpha<T> {
     fn into_iter(self) -> std::array::IntoIter<T, 1> {
         <Self as Into<[T; 1]>>::into(self).into_iter()
     }
+}
+
+impl_scalar_ops! {
+    impl Add::add for Alpha(a);
+    impl Div::div for Alpha(a);
+    impl Mul::mul for Alpha(a);
+    impl Sub::sub for Alpha(a);
+}
+
+impl_scalar_assign_ops! {
+    impl AddAssign::add_assign for Alpha(a);
+    impl DivAssign::div_assign for Alpha(a);
+    impl MulAssign::mul_assign for Alpha(a);
+    impl SubAssign::sub_assign for Alpha(a);
 }

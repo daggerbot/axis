@@ -6,6 +6,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+
 use crate::color::{Color, FromColor, FromColorLossy};
 use crate::component::{IntoComponent, IntoComponentLossy};
 
@@ -20,6 +22,20 @@ pub struct Lum<T> {
 impl<T> Color for Lum<T> {
     type Component = T;
     const NUM_COMPONENTS: usize = 1;
+}
+
+impl_scalar_ops! {
+    impl Add::add for Lum(l);
+    impl Div::div for Lum(l);
+    impl Mul::mul for Lum(l);
+    impl Sub::sub for Lum(l);
+}
+
+impl_scalar_assign_ops! {
+    impl AddAssign::add_assign for Lum(l);
+    impl DivAssign::div_assign for Lum(l);
+    impl MulAssign::mul_assign for Lum(l);
+    impl SubAssign::sub_assign for Lum(l);
 }
 
 /// Luminance-alpha color type.

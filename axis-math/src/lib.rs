@@ -14,6 +14,7 @@ extern crate serde;
 #[cfg(not(feature = "std"))]
 extern crate core as std;
 
+mod complex;
 mod convert;
 mod error;
 mod num;
@@ -22,7 +23,17 @@ mod try_ops;
 mod vector;
 mod wrapping_ops;
 
-pub use convert::{TryFromComposite, TryIntoComposite};
+pub use complex::Complex;
+pub use convert::{
+    FromComposite,
+    FromCompositeLossy,
+    FromLossy,
+    IntoComposite,
+    IntoCompositeLossy,
+    IntoLossy,
+    TryFromComposite,
+    TryIntoComposite,
+};
 pub use error::{DivByZeroError, OverflowError, RangeError, UnderflowError};
 pub use num::{Continuous, Identity, IntLimits, Scalar, Zero};
 pub use rect::Rect;
