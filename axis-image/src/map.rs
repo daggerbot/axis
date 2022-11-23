@@ -21,15 +21,19 @@ pub struct Map<'a, I: 'a + ?Sized + Image, T: 'a, F: Fn(I::Pixel<'a>) -> T> {
 impl<'a, I: 'a + Image, T: 'a, F: Fn(I::Pixel<'a>) -> T> Image for Map<'a, I, T, F> {
     type Pixel<'b> = T where Self: 'b;
 
-    unsafe fn pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
-        (self.callback)(self.parent.pixel_unchecked(pos))
+    unsafe fn get_pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
+        (self.callback)(self.parent.get_pixel_unchecked(pos))
     }
+
+    fn height(&self) -> usize { self.parent.height() }
 
     fn size(&self) -> Vector2<usize> { self.parent.size() }
 
-    fn try_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
-        Ok((self.callback)(self.parent.try_pixel(pos)?))
+    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
+        Ok((self.callback)(self.parent.try_get_pixel(pos)?))
     }
+
+    fn width(&self) -> usize { self.parent.width() }
 }
 
 /// Clones the values referenced by the parent image.
@@ -46,15 +50,19 @@ where
 {
     type Pixel<'b> = T where Self: 'b;
 
-    unsafe fn pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
-        self.parent.pixel_unchecked(pos).clone()
+    unsafe fn get_pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
+        self.parent.get_pixel_unchecked(pos).clone()
     }
+
+    fn height(&self) -> usize { self.parent.height() }
 
     fn size(&self) -> Vector2<usize> { self.parent.size() }
 
-    fn try_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
-        Ok(self.parent.try_pixel(pos)?.clone())
+    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
+        Ok(self.parent.try_get_pixel(pos)?.clone())
     }
+
+    fn width(&self) -> usize { self.parent.width() }
 }
 
 /// Copies the values referenced by the parent image.
@@ -71,13 +79,17 @@ where
 {
     type Pixel<'b> = T where Self: 'b;
 
-    unsafe fn pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
-        *self.parent.pixel_unchecked(pos)
+    unsafe fn get_pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T {
+        *self.parent.get_pixel_unchecked(pos)
     }
+
+    fn height(&self) -> usize { self.parent.height() }
 
     fn size(&self) -> Vector2<usize> { self.parent.size() }
 
-    fn try_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
-        Ok(*self.parent.try_pixel(pos)?)
+    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
+        Ok(*self.parent.try_get_pixel(pos)?)
     }
+
+    fn width(&self) -> usize { self.parent.width() }
 }

@@ -8,7 +8,7 @@
 
 use math::{Rect, Vector2};
 
-use crate::image::{Image, ImageExt, ImageMut, OutOfBounds};
+use crate::image::{Image, ImageExt, OutOfBounds};
 
 /// View of a portion of another `Image`.
 pub struct Subimage<'a, I: 'a + ?Sized + Image> {
@@ -19,15 +19,19 @@ pub struct Subimage<'a, I: 'a + ?Sized + Image> {
 impl<'a, I: 'a + Image> Image for Subimage<'a, I> {
     type Pixel<'b> = I::Pixel<'b> where Self: 'b;
 
-    unsafe fn pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> Self::Pixel<'b> {
-        self.parent.pixel_unchecked(pos + self.region.0)
+    unsafe fn get_pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> Self::Pixel<'b> {
+        self.parent.get_pixel_unchecked(pos + self.region.0)
     }
+
+    fn height(&self) -> usize { self.region.height() }
 
     fn size(&self) -> Vector2<usize> { self.region.size() }
 
-    fn try_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
-        Ok(self.parent.pixel(self.check_pixel_pos(pos)? + self.region.0))
+    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
+        Ok(self.parent.get_pixel(self.check_pixel_pos(pos)? + self.region.0))
     }
+
+    fn width(&self) -> usize { self.region.width() }
 }
 
 /// Mutable view of a portion of another `ImageMut`.
@@ -39,28 +43,17 @@ pub struct SubimageMut<'a, I: 'a + ?Sized + Image> {
 impl<'a, I: 'a + Image> Image for SubimageMut<'a, I> {
     type Pixel<'b> = I::Pixel<'b> where Self: 'b;
 
-    unsafe fn pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> Self::Pixel<'b> {
-        self.parent.pixel_unchecked(pos + self.region.0)
+    unsafe fn get_pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> Self::Pixel<'b> {
+        self.parent.get_pixel_unchecked(pos + self.region.0)
     }
+
+    fn height(&self) -> usize { self.region.height() }
 
     fn size(&self) -> Vector2<usize> { self.region.size() }
 
-    fn try_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
-        Ok(self.parent.pixel(self.check_pixel_pos(pos)? + self.region.0))
-    }
-}
-
-impl<'a, I: 'a + ImageMut> ImageMut for SubimageMut<'a, I> {
-    type PixelMut<'b> = I::PixelMut<'b> where Self: 'b;
-    type PixelValue = I::PixelValue;
-
-    unsafe fn pixel_mut_unchecked<'b>(&'b mut self, pos: Vector2<usize>) -> Self::PixelMut<'b> {
-        self.parent.pixel_mut_unchecked(pos + self.region.0)
+    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
+        Ok(self.parent.get_pixel(self.check_pixel_pos(pos)? + self.region.0))
     }
 
-    fn try_pixel_mut<'b>(&'b mut self, pos: Vector2<usize>)
-        -> Result<Self::PixelMut<'b>, OutOfBounds>
-    {
-        Ok(self.parent.pixel_mut(self.check_pixel_pos(pos)? + self.region.0))
-    }
+    fn width(&self) -> usize { self.region.width() }
 }

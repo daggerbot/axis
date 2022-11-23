@@ -8,12 +8,12 @@
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 use math::{Rect, Vector2};
 
 use crate::map::{Cloned, Copied, Map};
-use crate::subimage::{Subimage, SubimageMut};
+use crate::subimage::Subimage;
 use crate::vec_image::VecImage;
 
 /// Trait for getting pixels from an image.
@@ -49,13 +49,14 @@ pub trait Image: Sized {
         crate::codec::png::Encoder::new(self)
     }
 
-    /// Gets a copy of the referenced pixel at the specified position.
-    fn get_pixel<'a>(&'a self, pos: Vector2<usize>) -> <Self::Pixel<'a> as Deref>::Target
-    where
-        Self::Pixel<'a>: Deref,
-        <Self::Pixel<'a> as Deref>::Target: Copy,
-    {
-        *self.pixel(pos)
+    /// Gets the pixel at the specified position.
+    fn get_pixel<'a>(&'a self, pos: Vector2<usize>) -> Self::Pixel<'a> {
+        self.try_get_pixel(pos).unwrap()
+    }
+
+    /// Gets the pixel at the specified position without bounds checking.
+    unsafe fn get_pixel_unchecked<'a>(&'a self, pos: Vector2<usize>) -> Self::Pixel<'a> {
+        self.get_pixel(pos)
     }
 
     /// Returns the image's height in pixels.
@@ -64,26 +65,6 @@ pub trait Image: Sized {
     /// Uses a callback to map pixel values.
     fn map<'a, T: 'a, F: Fn(Self::Pixel<'a>) -> T>(&'a self, f: F) -> Map<'a, Self, T, F> {
         Map { callback: f, parent: self }
-    }
-
-    /// Gets the pixel at the specified position.
-    fn pixel<'a>(&'a self, pos: Vector2<usize>) -> Self::Pixel<'a> {
-        self.try_pixel(pos).unwrap()
-    }
-
-    /// Gets the pixel at the specified position without bounds checking.
-    unsafe fn pixel_unchecked<'a>(&'a self, pos: Vector2<usize>) -> Self::Pixel<'a> {
-        self.pixel(pos)
-    }
-
-    /// Gets a copy of the referenced pixel at the specified position without bounds checking.
-    unsafe fn get_pixel_unchecked<'a>(&'a self, pos: Vector2<usize>)
-        -> <Self::Pixel<'a> as Deref>::Target
-    where
-        Self::Pixel<'a>: Deref,
-        <Self::Pixel<'a> as Deref>::Target: Copy,
-    {
-        *self.pixel_unchecked(pos)
     }
 
     /// Returns the image's size in pixels.
@@ -104,18 +85,8 @@ pub trait Image: Sized {
         VecImage::from(self)
     }
 
-    /// Attempts to get a copy of the referenced pixel at the specified position.
-    fn try_get_pixel<'a>(&'a self, pos: Vector2<usize>)
-        -> Result<<Self::Pixel<'a> as Deref>::Target, OutOfBounds>
-    where
-        Self::Pixel<'a>: Deref,
-        <Self::Pixel<'a> as Deref>::Target: Copy,
-    {
-        Ok(*self.try_pixel(pos)?)
-    }
-
     /// Attempts to get the pixel at the specified position.
-    fn try_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<Self::Pixel<'a>, OutOfBounds>;
+    fn try_get_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<Self::Pixel<'a>, OutOfBounds>;
 
     /// Attempts to get a view of a region within the image.
     fn try_subimage<'a>(&'a self, region: Rect<usize>) -> Result<Subimage<'a, Self>, OutOfBounds> {
@@ -151,65 +122,6 @@ pub trait ImageExt: Image {
 }
 
 impl<T: ?Sized + Image> ImageExt for T {}
-
-/// Trait for changing the pixels in an image.
-pub trait ImageMut: Image {
-    /// Mutable reference to a pixel.
-    type PixelMut<'a>: DerefMut<Target = Self::PixelValue> where Self: 'a;
-
-    /// Pixel value type.
-    type PixelValue;
-
-    /// Gets a mutable reference to the pixel at the specified position.
-    fn pixel_mut<'a>(&'a mut self, pos: Vector2<usize>) -> Self::PixelMut<'a> {
-        self.try_pixel_mut(pos).unwrap()
-    }
-
-    /// Gets a mutable reference to the pixel at the specified position without bounds checking.
-    unsafe fn pixel_mut_unchecked<'a>(&'a mut self, pos: Vector2<usize>) -> Self::PixelMut<'a> {
-        self.pixel_mut(pos)
-    }
-
-    /// Sets the pixel at the specified position.
-    fn set_pixel(&mut self, pos: Vector2<usize>, pixel: Self::PixelValue) {
-        *self.pixel_mut(pos) = pixel;
-    }
-
-    /// Sets the pixel at the specified position without bounds checking.
-    unsafe fn set_pixel_unchecked(&mut self, pos: Vector2<usize>, pixel: Self::PixelValue) {
-        *self.pixel_mut_unchecked(pos) = pixel;
-    }
-
-    /// Gets a view of a region within the image.
-    fn subimage_mut<'a>(&'a mut self, region: Rect<usize>) -> SubimageMut<'a, Self> {
-        self.try_subimage_mut(region).unwrap()
-    }
-
-    /// Gets a view of a region within the image without bounds checking.
-    fn subimage_mut_unchecked<'a>(&'a mut self, region: Rect<usize>) -> SubimageMut<'a, Self> {
-        SubimageMut { parent: self, region }
-    }
-
-    /// Attempts to get a mutable reference to the pixel at the specified position.
-    fn try_pixel_mut<'a>(&'a mut self, pos: Vector2<usize>)
-        -> Result<Self::PixelMut<'a>, OutOfBounds>;
-
-    /// Attempts to set the pixel at the specified position.
-    fn try_set_pixel(&mut self, pos: Vector2<usize>, pixel: Self::PixelValue)
-        -> Result<(), OutOfBounds>
-    {
-        *self.try_pixel_mut(pos)? = pixel;
-        Ok(())
-    }
-
-    /// Attempts to get a mutable view of a region within the image.
-    fn try_subimage_mut<'a>(&'a mut self, region: Rect<usize>)
-        -> Result<SubimageMut<'a, Self>, OutOfBounds>
-    {
-        let region = self.check_pixel_region(region)?;
-        Ok(SubimageMut { parent: self, region })
-    }
-}
 
 /// Returned when attempting to access pixels outside of an image's boundaries.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -27,7 +27,7 @@ mod util;
 mod vec_image;
 
 pub use generate::{Generate, blank, generate, solid};
-pub use image::{Image, ImageExt, ImageMut, OutOfBounds};
+pub use image::{Image, OutOfBounds};
 pub use map::{Cloned, Copied, Map};
 pub use subimage::{Subimage, SubimageMut};
 pub use vec_image::VecImage;

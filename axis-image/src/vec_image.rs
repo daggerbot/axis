@@ -10,7 +10,7 @@ use std::ops::Range;
 
 use math::{TryMul, Vector2};
 
-use crate::image::{Image, ImageExt, ImageMut, OutOfBounds};
+use crate::image::{Image, ImageExt, OutOfBounds};
 
 /// Image type backed by a `Vec`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -104,7 +104,7 @@ impl<'a, T, I: ?Sized + Image<Pixel<'a> = T>> From<&'a I> for VecImage<T> {
 
         for y in 0..image.size.y {
             for x in 0..image.size.x {
-                image.buf.push(source.pixel((x, y).into()));
+                image.buf.push(source.get_pixel((x, y).into()));
             }
         }
 
@@ -115,32 +115,17 @@ impl<'a, T, I: ?Sized + Image<Pixel<'a> = T>> From<&'a I> for VecImage<T> {
 impl<T> Image for VecImage<T> {
     type Pixel<'a> = &'a T where Self: 'a;
 
-    fn height(&self) -> usize { self.size.y }
-
-    unsafe fn pixel_unchecked<'a>(&'a self, pos: Vector2<usize>) -> &'a T {
+    unsafe fn get_pixel_unchecked<'a>(&'a self, pos: Vector2<usize>) -> &'a T {
         self.buf.get_unchecked(self.pixel_index_unchecked(pos))
     }
 
+    fn height(&self) -> usize { self.size.y }
+
     fn size(&self) -> Vector2<usize> { self.size }
 
-    fn try_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<&'a T, OutOfBounds> {
+    fn try_get_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<&'a T, OutOfBounds> {
         Ok(&self.buf[self.try_pixel_index(pos)?])
     }
 
     fn width(&self) -> usize { self.size.x }
-}
-
-impl<T> ImageMut for VecImage<T> {
-    type PixelMut<'a> = &'a mut T where Self: 'a;
-    type PixelValue = T;
-
-    unsafe fn pixel_mut_unchecked<'a>(&'a mut self, pos: Vector2<usize>) -> &'a mut T {
-        let index = self.pixel_index_unchecked(pos);
-        self.buf.get_unchecked_mut(index)
-    }
-
-    fn try_pixel_mut<'a>(&'a mut self, pos: Vector2<usize>) -> Result<&'a mut T, OutOfBounds> {
-        let index = self.try_pixel_index(pos)?;
-        Ok(&mut self.buf[index])
-    }
 }

@@ -8,7 +8,7 @@
 
 use math::Vector2;
 
-use crate::{image::{Image, OutOfBounds}, ImageExt};
+use crate::image::{Image, ImageExt, OutOfBounds};
 
 /// Image object which invokes a callback for each pixel requested.
 pub struct Generate<T, F: Fn(Vector2<usize>) -> T> {
@@ -21,13 +21,13 @@ impl<T, F: Fn(Vector2<usize>) -> T> Image for Generate<T, F> {
 
     fn height(&self) -> usize { self.size.y }
 
-    unsafe fn pixel_unchecked<'a>(&'a self, pos: Vector2<usize>) -> T {
+    unsafe fn get_pixel_unchecked<'a>(&'a self, pos: Vector2<usize>) -> T {
         (self.callback)(pos)
     }
 
     fn size(&self) -> Vector2<usize> { self.size }
 
-    fn try_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
+    fn try_get_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
         Ok((self.callback)(self.check_pixel_pos(pos)?))
     }
 

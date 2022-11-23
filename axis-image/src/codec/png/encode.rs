@@ -207,7 +207,7 @@ where
                 packer = PixelPacker::new(filter, bit_depth);
             },
             InterlacerItem::Pixel { pos } => {
-                packer.pack(image.pixel(pos))?;
+                packer.pack(image.get_pixel(pos))?;
             },
         }
     }
