@@ -44,9 +44,21 @@ impl<T> From<[T; 1]> for Alpha<T> {
     }
 }
 
+impl<T> FromColor<bool> for Alpha<T> where bool: IntoComponent<T> {
+    fn from_color(other: bool) -> Alpha<T> {
+        Alpha { a: other.into_component() }
+    }
+}
+
 impl<T, F: IntoComponent<T>> FromColor<Alpha<F>> for Alpha<T> {
     fn from_color(other: Alpha<F>) -> Alpha<T> {
         Alpha { a: other.a.into_component() }
+    }
+}
+
+impl<T> FromColorLossy<bool> for Alpha<T> where bool: IntoComponentLossy<T> {
+    fn from_color_lossy(other: bool) -> Alpha<T> {
+        Alpha { a: other.into_component_lossy() }
     }
 }
 

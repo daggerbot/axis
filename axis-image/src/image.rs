@@ -8,11 +8,14 @@
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::marker::PhantomData;
 use std::ops::Deref;
 
+use color::IntoColorLossy;
 use math::{Rect, Vector2};
 
-use crate::map::{Cloned, Copied, Map};
+use crate::bitmap::Bitmap;
+use crate::map::{Cloned, Convert, Copied, Map};
 use crate::subimage::Subimage;
 use crate::vec_image::VecImage;
 
@@ -29,6 +32,14 @@ pub trait Image: Sized {
         <Self::Pixel<'a> as Deref>::Target: Clone,
     {
         Cloned { parent: self }
+    }
+
+    /// Returns an image that converts this image into another color type.
+    fn convert<'a, T>(&'a self) -> Convert<'a, T, Self::Pixel<'a>, Self>
+    where
+        Self::Pixel<'a>: IntoColorLossy<T>,
+    {
+        Convert { parent: self, _phantom: PhantomData }
     }
 
     /// Returns an image structure that copies each requested pixel.
@@ -80,6 +91,11 @@ pub trait Image: Sized {
         Subimage { parent: self, region }
     }
 
+    /// Renders the image's contents to a `Bitmap`.
+    fn to_bitmap<'a>(&'a self) -> Bitmap where Self: Image<Pixel<'a> = bool> {
+        Bitmap::from(self)
+    }
+
     /// Renders the image's contents to a `VecImage`.
     fn to_vec_image<'a>(&'a self) -> VecImage<Self::Pixel<'a>> {
         VecImage::from(self)
@@ -98,6 +114,27 @@ pub trait Image: Sized {
 
     /// Returns the image's width in pixels.
     fn width(&self) -> usize { self.size().x }
+}
+
+/// Trait for changing pixels in an image.
+pub trait ImageMut: Image {
+    /// Type used when changing a pixel. `Self::Pixel<'_>` should typically either be the same as
+    /// this or a reference to it.
+    type PixelValue;
+
+    /// Sets the pixel at the specified location.
+    fn set_pixel(&mut self, pos: Vector2<usize>, pixel: Self::PixelValue) {
+        self.try_set_pixel(pos, pixel).unwrap()
+    }
+
+    /// Sets the pixel at the specified location without bounds checking.
+    unsafe fn set_pixel_unchecked(&mut self, pos: Vector2<usize>, pixel: Self::PixelValue) {
+        self.set_pixel(pos, pixel)
+    }
+
+    /// Attempts to set the pixel at the specified location.
+    fn try_set_pixel(&mut self, pos: Vector2<usize>, pixel: Self::PixelValue)
+        -> Result<(), OutOfBounds>;
 }
 
 /// Extension functions for images.

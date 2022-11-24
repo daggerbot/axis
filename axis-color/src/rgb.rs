@@ -24,11 +24,23 @@ impl<T> Color for Red<T> {
     const NUM_COMPONENTS: usize = 1;
 }
 
+impl<T> FromColor<bool> for Red<T> where bool: IntoComponent<T> {
+    fn from_color(other: bool) -> Red<T> {
+        Red { r: other.into_component() }
+    }
+}
+
 impl<T, F: IntoComponent<T>> FromColor<Lum<F>> for Red<T> {
     fn from_color(other: Lum<F>) -> Red<T> {
         Red {
             r: other.l.into_component(),
         }
+    }
+}
+
+impl<T> FromColorLossy<bool> for Red<T> where bool: IntoComponentLossy<T> {
+    fn from_color_lossy(other: bool) -> Red<T> {
+        Red { r: other.into_component_lossy() }
     }
 }
 

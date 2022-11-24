@@ -10,10 +10,10 @@ use std::ops::Range;
 
 use math::{TryMul, Vector2};
 
-use crate::image::{Image, ImageExt, OutOfBounds};
+use crate::image::{Image, ImageExt, ImageMut, OutOfBounds};
 
 /// Image type backed by a `Vec`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct VecImage<T> {
     buf: Vec<T>,
     size: Vector2<usize>,
@@ -25,14 +25,6 @@ impl<T> VecImage<T> {
 
     /// Returns a mutable reference to the underlying buffer.
     pub fn buf_mut(&mut self) -> &mut [T] { &mut self.buf }
-
-    /// Returns an empty image.
-    pub fn empty() -> VecImage<T> {
-        VecImage {
-            buf: Vec::new(),
-            size: Vector2::new(0, 0),
-        }
-    }
 
     /// Deconstructs the image and returns its buffer.
     pub fn into_buf(self) -> Vec<T> { self.buf }
@@ -128,4 +120,19 @@ impl<T> Image for VecImage<T> {
     }
 
     fn width(&self) -> usize { self.size.x }
+}
+
+impl<T> ImageMut for VecImage<T> {
+    type PixelValue = T;
+
+    unsafe fn set_pixel_unchecked(&mut self, pos: Vector2<usize>, pixel: T) {
+        let index = self.pixel_index_unchecked(pos);
+        *self.buf.get_unchecked_mut(index) = pixel;
+    }
+
+    fn try_set_pixel(&mut self, pos: Vector2<usize>, pixel: T) -> Result<(), OutOfBounds> {
+        let index = self.try_pixel_index(pos)?;
+        self.buf[index] = pixel;
+        Ok(())
+    }
 }

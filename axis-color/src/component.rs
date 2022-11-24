@@ -29,8 +29,15 @@ pub trait Component {
     fn wrap(self) -> Self;
 }
 
+impl Component for bool {
+    fn max() -> bool { true }
+    fn min() -> bool { false }
+    fn saturate(self) -> bool { self }
+    fn wrap(self) -> bool { self }
+}
+
 /// Converts losslessly from another color component type.
-pub trait FromComponent<T> : FromComponentLossy<T> {
+pub trait FromComponent<T>: FromComponentLossy<T> {
     fn from_component(other: T) -> Self;
 }
 
@@ -47,7 +54,7 @@ impl FromComponent<f32> for f64 {
 }
 
 /// Converts losslessly into another color component type.
-pub trait IntoComponent<T> : IntoComponentLossy<T> {
+pub trait IntoComponent<T>: IntoComponentLossy<T> {
     fn into_component(self) -> T;
 }
 
@@ -161,6 +168,22 @@ macro_rules! impl_float_to_int {
     )* )* };
 }
 
+macro_rules! impl_from_to_bool {
+    ($($ty:ty),*) => { $(
+        impl FromComponent<bool> for $ty {
+            fn from_component(other: bool) -> $ty {
+                if other { Component::max() } else { Component::min() }
+            }
+        }
+
+        impl FromComponentLossy<$ty> for bool {
+            fn from_component_lossy(other: $ty) -> bool {
+                other > <$ty as Component>::min()
+            }
+        }
+    )* };
+}
+
 impl_uint!(u8, u16, u32, u64, u128);
 impl_float!(f32, f64);
 
@@ -196,3 +219,5 @@ impl_float_to_int! {
     f32 -> u8, u16, u32, u64, u128;
     f64 -> u8, u16, u32, u64, u128;
 }
+
+impl_from_to_bool!(u8, u16, u32, u64, u128, f32, f64);

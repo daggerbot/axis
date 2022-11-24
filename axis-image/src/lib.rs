@@ -18,6 +18,7 @@ extern crate axis_math as math;
 /// Support for image codecs as optional cargo features.
 pub mod codec;
 
+mod bitmap;
 mod generate;
 mod image;
 mod map;
@@ -26,8 +27,9 @@ mod subimage;
 mod util;
 mod vec_image;
 
+pub use bitmap::Bitmap;
 pub use generate::{Generate, blank, generate, solid};
-pub use image::{Image, OutOfBounds};
-pub use map::{Cloned, Copied, Map};
+pub use image::{Image, ImageMut, OutOfBounds};
+pub use map::{Cloned, Convert, Copied, Map};
 pub use subimage::{Subimage, SubimageMut};
 pub use vec_image::VecImage;

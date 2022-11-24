@@ -24,6 +24,18 @@ impl<T> Color for Lum<T> {
     const NUM_COMPONENTS: usize = 1;
 }
 
+impl<T> FromColor<bool> for Lum<T> where bool: IntoComponent<T> {
+    fn from_color(other: bool) -> Lum<T> {
+        Lum { l: other.into_component() }
+    }
+}
+
+impl<T> FromColorLossy<bool> for Lum<T> where bool: IntoComponentLossy<T> {
+    fn from_color_lossy(other: bool) -> Lum<T> {
+        Lum { l: other.into_component_lossy() }
+    }
+}
+
 impl_scalar_ops! {
     impl Add::add for Lum(l);
     impl Div::div for Lum(l);

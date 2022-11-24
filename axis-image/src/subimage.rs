@@ -8,7 +8,7 @@
 
 use math::{Rect, Vector2};
 
-use crate::image::{Image, ImageExt, OutOfBounds};
+use crate::image::{Image, ImageExt, ImageMut, OutOfBounds};
 
 /// View of a portion of another `Image`.
 pub struct Subimage<'a, I: 'a + ?Sized + Image> {
@@ -56,4 +56,19 @@ impl<'a, I: 'a + Image> Image for SubimageMut<'a, I> {
     }
 
     fn width(&self) -> usize { self.region.width() }
+}
+
+impl<'a, I: 'a + ImageMut> ImageMut for SubimageMut<'a, I> {
+    type PixelValue = I::PixelValue;
+
+    unsafe fn set_pixel_unchecked(&mut self, pos: Vector2<usize>, pixel: I::PixelValue) {
+        self.parent.set_pixel_unchecked(pos + self.region.0, pixel);
+    }
+
+    fn try_set_pixel(&mut self, pos: Vector2<usize>, pixel: I::PixelValue)
+        -> Result<(), OutOfBounds>
+    {
+        self.parent.set_pixel(self.check_pixel_pos(pos)? + self.region.0, pixel);
+        Ok(())
+    }
 }
