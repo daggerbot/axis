@@ -3,4 +3,5 @@ members = [
     "axis-color",
     "axis-image",
     "axis-math",
+    "axis-window",
 ]
