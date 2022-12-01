@@ -14,8 +14,21 @@ fn main() {
     let context: window::Context<()> =
         window::Context::open_default().expect("can't open window system context");
     let device = context.default_device();
-    let _window = device
+    let mut window = device
         .new_window()
         .build(())
         .expect("can't create main window");
+
+    window.set_visible(true).expect("can't show window");
+
+    let main_loop = window::MainLoop::new(window::UpdateKind::Passive);
+    context
+        .run(&main_loop, |event| {
+            println!("{:?}", event);
+            match event {
+                window::Event::Close { .. } => main_loop.quit(),
+                _ => (),
+            }
+        })
+        .expect("main loop failed");
 }

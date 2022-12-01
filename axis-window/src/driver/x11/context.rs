@@ -12,11 +12,13 @@ use std::marker::PhantomData;
 use std::os::unix::io::{AsFd, BorrowedFd};
 use std::rc::Rc;
 
-use crate::context::IContext;
+use crate::context::{IContext, MainLoop};
 use crate::driver::x11::device::{Device, Devices};
 use crate::driver::x11::pixel_format::{PixelFormat, PixelFormats};
 use crate::driver::x11::window::{Window, WindowBuilder, WindowManager};
 use crate::error::Result;
+use crate::event::{Event, UpdateKind};
+use crate::util::CBox;
 
 /// Connection to an X11 server.
 pub struct Connection {
@@ -57,6 +59,42 @@ impl Connection {
     #[cfg(feature = "x11-sys")]
     pub fn xlib_display_ptr(&self) -> *mut x11_sys::Display {
         self.xlib
+    }
+}
+
+impl Connection {
+    pub(crate) fn intern_atom<S: ?Sized + AsRef<[u8]>>(
+        &self, name: &S,
+    ) -> xcb_sys::xcb_intern_atom_cookie_t {
+        let name = name.as_ref();
+
+        unsafe {
+            xcb_sys::xcb_intern_atom(
+                self.xcb,
+                0,
+                u16::try_from(name.len()).unwrap(),
+                name.as_ptr() as *const c_char,
+            )
+        }
+    }
+
+    pub(crate) fn intern_atom_reply(
+        &self, cookie: xcb_sys::xcb_intern_atom_cookie_t,
+    ) -> Result<u32> {
+        unsafe {
+            let mut err_ptr = std::ptr::null_mut();
+            let reply_ptr = xcb_sys::xcb_intern_atom_reply(self.xcb, cookie, &mut err_ptr);
+            if reply_ptr.is_null() {
+                if err_ptr.is_null() {
+                    return Err(err!(RequestFailed("XInternAtom")));
+                } else {
+                    let err = CBox::from_raw(err_ptr);
+                    return Err(err!(RequestFailed{"XInternAtom: {:?}", *err}));
+                }
+            }
+            let reply = CBox::from_raw(reply_ptr);
+            Ok(reply.atom)
+        }
     }
 }
 
@@ -120,11 +158,32 @@ impl PartialEq for Connection {
     }
 }
 
+/// Commonly used X atoms.
+#[derive(Clone, Copy)]
+pub struct Atoms {
+    pub wm_delete_window: u32,
+    pub wm_protocols: u32,
+}
+
+impl Atoms {
+    fn intern(connection: &Connection) -> Result<Atoms> {
+        let wm_delete_window = connection.intern_atom("WM_DELETE_WINDOW");
+        let wm_protocols = connection.intern_atom("WM_PROTOCOLS");
+
+        Ok(Atoms {
+            wm_delete_window: connection.intern_atom_reply(wm_delete_window)?,
+            wm_protocols: connection.intern_atom_reply(wm_protocols)?,
+        })
+    }
+}
+
 /// X11 window system context.
 pub struct Context<W: 'static + Clone> {
+    atoms: Rc<Atoms>,
     connection: Rc<Connection>,
     _phantom: PhantomData<W>,
     window_manager: Rc<RefCell<WindowManager<W>>>,
+    xcb: *mut xcb_sys::xcb_connection_t,
 }
 
 impl<W: 'static + Clone> Context<W> {
@@ -145,8 +204,92 @@ impl<W: 'static + Clone> Context<W> {
 }
 
 impl<W: 'static + Clone> Context<W> {
+    pub(crate) fn atoms(&self) -> &Rc<Atoms> {
+        &self.atoms
+    }
+
     pub(crate) fn window_manager(&self) -> &Rc<RefCell<WindowManager<W>>> {
         &self.window_manager
+    }
+}
+
+impl<W: 'static + Clone> Context<W> {
+    fn flush(&self) -> Result<()> {
+        unsafe {
+            xcb_sys::xcb_flush(self.xcb);
+            match xcb_sys::xcb_connection_has_error(self.xcb) {
+                0 => Ok(()),
+                err_code => Err(err!(IoError{"xcb_connection_has_error: {}", err_code})),
+            }
+        }
+    }
+
+    fn handle_client_message<F: FnMut(Event<W>)>(
+        &self, event: &xcb_sys::xcb_client_message_event_t, f: &mut F,
+    ) -> Result<()> {
+        if event.type_ == self.atoms.wm_protocols && event.format == 32 {
+            let protocol = unsafe { event.data.data32[0] };
+            if protocol == self.atoms.wm_delete_window {
+                if let Some(window) = self.window_manager.borrow().get(event.window).cloned() {
+                    f(Event::Close {
+                        window_id: window.id().clone(),
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_event<F: FnMut(Event<W>)>(
+        &self, xevent: CBox<xcb_sys::xcb_generic_event_t>, f: &mut F,
+    ) -> Result<()> {
+        let xevent_ref: &xcb_sys::xcb_generic_event_t = xevent.as_ref();
+        let xevent_ptr = xevent_ref as *const xcb_sys::xcb_generic_event_t;
+
+        match (xevent.response_type & !0x80) as u32 {
+            xcb_sys::XCB_CLIENT_MESSAGE => {
+                self.handle_client_message(
+                    unsafe { &(*(xevent_ptr as *const xcb_sys::xcb_client_message_event_t)) },
+                    f,
+                )?;
+            },
+
+            xcb_sys::XCB_DESTROY_NOTIFY => {
+                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_destroy_notify_event_t) };
+                if let Some(window) = self.window_manager.borrow_mut().expire(ev.window) {
+                    f(Event::Destroy {
+                        window_id: window.id().clone(),
+                    });
+                }
+            },
+
+            xcb_sys::XCB_MAP_NOTIFY => {
+                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_map_notify_event_t) };
+                if let Some(window) = self.window_manager.borrow().get(ev.window).cloned() {
+                    window.update_visibility(true);
+                    f(Event::Visibility {
+                        window_id: window.id().clone(),
+                        visible: true,
+                    });
+                }
+            },
+
+            xcb_sys::XCB_UNMAP_NOTIFY => {
+                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_unmap_notify_event_t) };
+                if let Some(window) = self.window_manager.borrow().get(ev.window).cloned() {
+                    window.update_visibility(false);
+                    f(Event::Visibility {
+                        window_id: window.id().clone(),
+                        visible: false,
+                    });
+                }
+            },
+
+            _ => (),
+        }
+
+        Ok(())
     }
 }
 
@@ -161,10 +304,15 @@ impl<W: 'static + Clone> Context<W> {
             );
         }
 
+        let atoms = Atoms::intern(&connection)?;
+        let xcb = connection.xcb;
+
         Ok(Context {
+            atoms: Rc::new(atoms),
             connection: Rc::new(connection),
             _phantom: PhantomData,
             window_manager: Rc::new(RefCell::new(WindowManager::new())),
+            xcb,
         })
     }
 }
@@ -191,6 +339,45 @@ impl<W: 'static + Clone> IContext for Context<W> {
 
     fn devices(&self) -> Devices<W> {
         Devices::new(&self)
+    }
+
+    fn run<F: FnMut(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, mut f: F) -> Result<()> {
+        main_loop.clear_quit_flag();
+
+        'main_loop: while !main_loop.is_quit_requested() {
+            self.flush()?;
+
+            unsafe {
+                let mut xevent_ptr = xcb_sys::xcb_poll_for_event(self.xcb);
+                if xevent_ptr.is_null() {
+                    match main_loop.update_kind() {
+                        UpdateKind::Passive => {
+                            f(Event::Update {
+                                kind: UpdateKind::Passive,
+                            });
+                            if main_loop.is_quit_requested() {
+                                break 'main_loop;
+                            }
+                            self.flush()?;
+                            xevent_ptr = xcb_sys::xcb_wait_for_event(self.xcb);
+                        },
+
+                        UpdateKind::Active | UpdateKind::VBlank => {
+                            f(Event::Update {
+                                kind: UpdateKind::Active,
+                            });
+                            continue 'main_loop;
+                        },
+                    }
+                }
+                if !xevent_ptr.is_null() {
+                    let xevent = CBox::from_raw(xevent_ptr);
+                    self.handle_event(xevent, &mut f)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

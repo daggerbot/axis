@@ -11,13 +11,14 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::device::IDevice;
-use crate::driver::x11::context::{Connection, Context};
+use crate::driver::x11::context::{Atoms, Connection, Context};
 use crate::driver::x11::pixel_format::{PixelFormat, PixelFormats};
 use crate::driver::x11::window::{WindowBuilder, WindowManager};
 
 /// X11 window system type which corresponds to an X "screen".
 #[derive(Clone)]
 pub struct Device<W: 'static + Clone> {
+    atoms: Rc<Atoms>,
     connection: Rc<Connection>,
     _phantom_data: PhantomData<W>,
     screen_index: u8,
@@ -53,6 +54,10 @@ impl<W: 'static + Clone> Device<W> {
 }
 
 impl<W: 'static + Clone> Device<W> {
+    pub(crate) fn atoms(&self) -> &Rc<Atoms> {
+        &self.atoms
+    }
+
     pub(crate) fn window_manager(&self) -> &Rc<RefCell<WindowManager<W>>> {
         &self.window_manager
     }
@@ -90,6 +95,7 @@ impl<W: 'static + Clone> PartialEq for Device<W> {
 
 /// Iterator over available X screens.
 pub struct Devices<W: 'static + Clone> {
+    atoms: Rc<Atoms>,
     connection: Rc<Connection>,
     iter: xcb_sys::xcb_screen_iterator_t,
     _phantom_data: PhantomData<W>,
@@ -104,6 +110,7 @@ impl<W: 'static + Clone> Devices<W> {
 
         unsafe {
             Devices {
+                atoms: context.atoms().clone(),
                 connection,
                 iter: xcb_sys::xcb_setup_roots_iterator(xcb_sys::xcb_get_setup(xcb)),
                 _phantom_data: PhantomData,
@@ -122,6 +129,7 @@ impl<W: 'static + Clone> Iterator for Devices<W> {
             return None;
         }
         let device = Device {
+            atoms: self.atoms.clone(),
             connection: self.connection.clone(),
             _phantom_data: PhantomData,
             screen_index: self.screen_index,

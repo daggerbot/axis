@@ -89,6 +89,9 @@ pub trait IWindow {
 
     /// Returns true if the window is visible.
     fn is_visible(&self) -> bool;
+
+    /// Shows or hides the window.
+    fn set_visible(&mut self, visible: bool) -> Result<()>;
 }
 
 /// Object interface for top-level windows.
@@ -98,6 +101,7 @@ pub trait IAnyWindow {
     fn id(&self) -> &Self::WindowId;
     fn is_alive(&self) -> bool;
     fn is_visible(&self) -> bool;
+    fn set_visible(&mut self, visible: bool) -> Result<()>;
 }
 
 impl<T: IWindow> IAnyWindow for T {
@@ -113,6 +117,10 @@ impl<T: IWindow> IAnyWindow for T {
 
     fn is_visible(&self) -> bool {
         IWindow::is_visible(self)
+    }
+
+    fn set_visible(&mut self, visible: bool) -> Result<()> {
+        IWindow::set_visible(self, visible)
     }
 }
 
@@ -133,5 +141,10 @@ impl<W: 'static + Clone> Window<W> {
     /// Determines whether the window is visible.
     pub fn is_visible(&self) -> bool {
         self.0.is_visible()
+    }
+
+    /// Shows or hides the window.
+    pub fn set_visible(&mut self, visible: bool) -> Result<()> {
+        self.0.set_visible(visible)
     }
 }

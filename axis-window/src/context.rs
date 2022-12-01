@@ -6,10 +6,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::device::{Device, Devices, IDevice};
 use crate::error::Result;
+use crate::event::{Event, UpdateKind};
 use crate::pixel_format::IPixelFormat;
 use crate::window::{IWindow, IWindowBuilder};
 
@@ -28,6 +30,9 @@ pub trait IContext: 'static + Sized {
 
     /// Returns an iterator over all available devices.
     fn devices(&self) -> Self::Devices;
+
+    /// Runs the main loop.
+    fn run<F: FnMut(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, f: F) -> Result<()>;
 }
 
 /// Window system context object trait.
@@ -36,6 +41,7 @@ pub trait IAnyContext {
 
     fn default_device(&self) -> Device<Self::WindowId>;
     fn devices(&self) -> Devices<Self::WindowId>;
+    fn run(&self, main_loop: &MainLoop, f: &mut dyn FnMut(Event<Self::WindowId>)) -> Result<()>;
 }
 
 impl<T: IContext> IAnyContext for T {
@@ -49,6 +55,10 @@ impl<T: IContext> IAnyContext for T {
         Devices(Box::new(
             IContext::devices(self).map(|device| Device(Rc::new(device))),
         ))
+    }
+
+    fn run(&self, main_loop: &MainLoop, f: &mut dyn FnMut(Event<Self::WindowId>)) -> Result<()> {
+        IContext::run(self, main_loop, f)
     }
 }
 
@@ -83,11 +93,57 @@ impl<W: 'static + Clone> Context<W> {
 
         Err(err!(UnsupportedPlatform))
     }
+
+    /// Runs the main loop.
+    pub fn run<F: FnMut(Event<W>)>(&self, main_loop: &MainLoop, mut f: F) -> Result<()> {
+        self.0.run(main_loop, &mut f)
+    }
 }
 
 impl<W: 'static + Clone, C: IContext<WindowId = W>> From<C> for Context<W> {
     /// Constructs an opaque context.
     fn from(inner: C) -> Context<W> {
         Context(Box::new(inner))
+    }
+}
+
+/// Object which determines the behavior of the main loop and when it breaks.
+pub struct MainLoop {
+    quit: Cell<bool>,
+    update_kind: Cell<UpdateKind>,
+}
+
+impl MainLoop {
+    /// Constructs a new main loop.
+    pub fn new(update_kind: UpdateKind) -> MainLoop {
+        MainLoop {
+            quit: Cell::new(false),
+            update_kind: Cell::new(update_kind),
+        }
+    }
+
+    /// Causes the main loop to break as soon as possible.
+    pub fn quit(&self) {
+        self.quit.set(true);
+    }
+
+    /// Changes the behavior of update events.
+    pub fn set_update_kind(&self, update_kind: UpdateKind) {
+        self.update_kind.set(update_kind);
+    }
+
+    /// Returns the update event behavior.
+    pub fn update_kind(&self) -> UpdateKind {
+        self.update_kind.get()
+    }
+}
+
+impl MainLoop {
+    pub(crate) fn clear_quit_flag(&self) {
+        self.quit.set(false);
+    }
+
+    pub(crate) fn is_quit_requested(&self) -> bool {
+        self.quit.get()
     }
 }

@@ -23,6 +23,13 @@ impl<T: 'static + Sized> CBox<T> {
 }
 
 #[cfg(feature = "libc")]
+impl<T: 'static + ?Sized> AsRef<T> for CBox<T> {
+    fn as_ref(&self) -> &T {
+        self.data
+    }
+}
+
+#[cfg(feature = "libc")]
 impl<T: 'static + ?Sized> std::ops::Deref for CBox<T> {
     type Target = T;
     fn deref(&self) -> &T {

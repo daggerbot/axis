@@ -40,10 +40,10 @@ mod pixel_format;
 mod util;
 mod window;
 
-pub use context::{Context, IContext};
+pub use context::{Context, IContext, MainLoop};
 pub use device::{Device, Devices, IDevice};
 pub use error::{Error, ErrorKind, Result};
-pub use event::Event;
+pub use event::{Event, UpdateKind};
 pub use pixel_format::{IPixelFormat, PixelFormat, PixelFormats};
 pub use window::{IWindow, IWindowBuilder, Window, WindowBuilder, WindowKind, WindowPos};
 
