@@ -46,7 +46,9 @@ impl<T: IContext> IAnyContext for T {
     }
 
     fn devices(&self) -> Devices<Self::WindowId> {
-        Devices(Box::new(IContext::devices(self).map(|device| Device(Rc::new(device)))))
+        Devices(Box::new(
+            IContext::devices(self).map(|device| Device(Rc::new(device))),
+        ))
     }
 }
 
@@ -74,7 +76,9 @@ impl<W: 'static + Clone> Context<W> {
 
         #[cfg(x11_enabled)]
         {
-            return Ok(Context(Box::new(crate::driver::x11::Context::open_default()?)));
+            return Ok(Context(Box::new(
+                crate::driver::x11::Context::open_default()?,
+            )));
         }
 
         Err(err!(UnsupportedPlatform))

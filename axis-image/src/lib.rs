@@ -6,14 +6,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+extern crate axis_color as color;
+extern crate axis_math as math;
 #[cfg(feature = "byteorder")]
 extern crate byteorder;
-extern crate axis_color as color;
 #[cfg(feature = "crc32fast")]
 extern crate crc32fast;
 #[cfg(feature = "flate2")]
 extern crate flate2;
-extern crate axis_math as math;
 
 /// Support for image codecs as optional cargo features.
 pub mod codec;
@@ -28,7 +28,7 @@ mod util;
 mod vec_image;
 
 pub use bitmap::Bitmap;
-pub use generate::{Generate, blank, generate, solid};
+pub use generate::{blank, generate, solid, Generate};
 pub use image::{Image, ImageMut, OutOfBounds};
 pub use map::{Cloned, Convert, Copied, Map};
 pub use subimage::{Subimage, SubimageMut};

@@ -68,7 +68,9 @@ impl Display for InvalidInterlaceMethod {
 }
 
 impl Error for InvalidInterlaceMethod {
-    fn description(&self) -> &str { Self::DESCRIPTION }
+    fn description(&self) -> &str {
+        Self::DESCRIPTION
+    }
 }
 
 /// Type returned by iterating an `Interlacer`.
@@ -132,10 +134,12 @@ impl Adam7Interlacer {
             offset_x: 0,
             pass: 0,
             pos: Vector2::new(0, 0),
-            queue: Some(InterlacerItem::BeginPass { size: Vector2 {
-                x: div_ceil(image_size.x, 8),
-                y: div_ceil(image_size.y, 8),
-            }}),
+            queue: Some(InterlacerItem::BeginPass {
+                size: Vector2 {
+                    x: div_ceil(image_size.x, 8),
+                    y: div_ceil(image_size.y, 8),
+                },
+            }),
             stride: Vector2::new(8, 8),
         }
     }
@@ -183,10 +187,18 @@ impl Iterator for Adam7Interlacer {
                     _ => unreachable!(),
                 }
                 self.offset_x = self.pos.x;
-                return Some(InterlacerItem::BeginPass { size: Vector2 {
-                    x: div_ceil(self.image_size.x.try_sub(self.pos.x).saturate(), self.stride.x),
-                    y: div_ceil(self.image_size.y.try_sub(self.pos.y).saturate(), self.stride.y),
-                }});
+                return Some(InterlacerItem::BeginPass {
+                    size: Vector2 {
+                        x: div_ceil(
+                            self.image_size.x.try_sub(self.pos.x).saturate(),
+                            self.stride.x,
+                        ),
+                        y: div_ceil(
+                            self.image_size.y.try_sub(self.pos.y).saturate(),
+                            self.stride.y,
+                        ),
+                    },
+                });
             } else if self.pos.x >= self.image_size.x {
                 self.pos.x = self.offset_x;
                 self.pos.y += self.stride.y;

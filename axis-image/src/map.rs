@@ -27,15 +27,21 @@ impl<'a, I: 'a + Image, T: 'a, F: Fn(I::Pixel<'a>) -> T> Image for Map<'a, I, T,
         (self.callback)(self.parent.get_pixel_unchecked(pos))
     }
 
-    fn height(&self) -> usize { self.parent.height() }
+    fn height(&self) -> usize {
+        self.parent.height()
+    }
 
-    fn size(&self) -> Vector2<usize> { self.parent.size() }
+    fn size(&self) -> Vector2<usize> {
+        self.parent.size()
+    }
 
     fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
         Ok((self.callback)(self.parent.try_get_pixel(pos)?))
     }
 
-    fn width(&self) -> usize { self.parent.width() }
+    fn width(&self) -> usize {
+        self.parent.width()
+    }
 }
 
 /// Clones the values referenced by the parent image.
@@ -56,15 +62,21 @@ where
         self.parent.get_pixel_unchecked(pos).clone()
     }
 
-    fn height(&self) -> usize { self.parent.height() }
+    fn height(&self) -> usize {
+        self.parent.height()
+    }
 
-    fn size(&self) -> Vector2<usize> { self.parent.size() }
+    fn size(&self) -> Vector2<usize> {
+        self.parent.size()
+    }
 
     fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
         Ok(self.parent.try_get_pixel(pos)?.clone())
     }
 
-    fn width(&self) -> usize { self.parent.width() }
+    fn width(&self) -> usize {
+        self.parent.width()
+    }
 }
 
 /// Converts requested pixels to another color type.
@@ -73,7 +85,8 @@ pub struct Convert<'a, T, F: 'a + IntoColorLossy<T>, I: 'a + ?Sized + Image<Pixe
     pub(crate) _phantom: PhantomData<T>,
 }
 
-impl<'a, T, F: 'a + IntoColorLossy<T>, I: 'a + Image<Pixel<'a> = F>> Image for Convert<'a, T, F, I>
+impl<'a, T, F: 'a + IntoColorLossy<T>, I: 'a + Image<Pixel<'a> = F>> Image
+    for Convert<'a, T, F, I>
 {
     type Pixel<'b> = T where Self: 'b;
 
@@ -81,15 +94,21 @@ impl<'a, T, F: 'a + IntoColorLossy<T>, I: 'a + Image<Pixel<'a> = F>> Image for C
         self.parent.get_pixel_unchecked(pos).into_color_lossy()
     }
 
-    fn height(&self) -> usize { self.parent.height() }
+    fn height(&self) -> usize {
+        self.parent.height()
+    }
 
-    fn size(&self) -> Vector2<usize> { self.parent.size() }
+    fn size(&self) -> Vector2<usize> {
+        self.parent.size()
+    }
 
     fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
         Ok(self.parent.try_get_pixel(pos)?.into_color_lossy())
     }
 
-    fn width(&self) -> usize { self.parent.width() }
+    fn width(&self) -> usize {
+        self.parent.width()
+    }
 }
 
 /// Copies the values referenced by the parent image.
@@ -110,13 +129,19 @@ where
         *self.parent.get_pixel_unchecked(pos)
     }
 
-    fn height(&self) -> usize { self.parent.height() }
+    fn height(&self) -> usize {
+        self.parent.height()
+    }
 
-    fn size(&self) -> Vector2<usize> { self.parent.size() }
+    fn size(&self) -> Vector2<usize> {
+        self.parent.size()
+    }
 
     fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
         Ok(*self.parent.try_get_pixel(pos)?)
     }
 
-    fn width(&self) -> usize { self.parent.width() }
+    fn width(&self) -> usize {
+        self.parent.width()
+    }
 }

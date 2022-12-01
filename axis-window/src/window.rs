@@ -19,7 +19,9 @@ pub enum WindowKind {
 }
 
 impl Default for WindowKind {
-    fn default() -> WindowKind { WindowKind::Normal }
+    fn default() -> WindowKind {
+        WindowKind::Normal
+    }
 }
 
 /// Determines where to place a new window.
@@ -31,7 +33,9 @@ pub enum WindowPos {
 }
 
 impl Default for WindowPos {
-    fn default() -> WindowPos { WindowPos::Default }
+    fn default() -> WindowPos {
+        WindowPos::Default
+    }
 }
 
 /// Interface for window builders.
@@ -40,8 +44,9 @@ pub trait IWindowBuilder {
 
     /// Builds a window and gives it an ID. The ID does not have to be unique, but it is the value
     /// that the library user will get back when receiving window events.
-    fn build(&self, id: <Self::Context as IContext>::WindowId)
-        -> Result<<Self::Context as IContext>::Window>;
+    fn build(
+        &self, id: <Self::Context as IContext>::WindowId,
+    ) -> Result<<Self::Context as IContext>::Window>;
 }
 
 /// Object interface for window builders.
@@ -98,9 +103,17 @@ pub trait IAnyWindow {
 impl<T: IWindow> IAnyWindow for T {
     type WindowId = <T::Context as IContext>::WindowId;
 
-    fn id(&self) -> &Self::WindowId { IWindow::id(self) }
-    fn is_alive(&self) -> bool { IWindow::is_alive(self) }
-    fn is_visible(&self) -> bool { IWindow::is_visible(self) }
+    fn id(&self) -> &Self::WindowId {
+        IWindow::id(self)
+    }
+
+    fn is_alive(&self) -> bool {
+        IWindow::is_alive(self)
+    }
+
+    fn is_visible(&self) -> bool {
+        IWindow::is_visible(self)
+    }
 }
 
 /// Opaque top-level window type.
@@ -108,11 +121,17 @@ pub struct Window<W: 'static + Clone>(pub(crate) Box<dyn 'static + IAnyWindow<Wi
 
 impl<W: 'static + Clone> Window<W> {
     /// Returns the window ID.
-    pub fn id(&self) -> &W { self.0.id() }
+    pub fn id(&self) -> &W {
+        self.0.id()
+    }
 
     /// Determines whether the window is alive (to the best of our current knowledge).
-    pub fn is_alive(&self) -> bool { self.0.is_alive() }
+    pub fn is_alive(&self) -> bool {
+        self.0.is_alive()
+    }
 
     /// Determines whether the window is visible.
-    pub fn is_visible(&self) -> bool { self.0.is_visible() }
+    pub fn is_visible(&self) -> bool {
+        self.0.is_visible()
+    }
 }

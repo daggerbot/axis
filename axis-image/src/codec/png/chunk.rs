@@ -10,7 +10,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 
-use byteorder::{BE, WriteBytesExt};
+use byteorder::{WriteBytesExt, BE};
 use crc32fast::Hasher;
 
 /// PNG chunk ID.
@@ -28,28 +28,40 @@ impl ChunkId {
     pub const tRNS: ChunkId = ChunkId::from_unchecked("tRNS");
 
     /// Returns the chunk ID as a slice of bytes.
-    pub fn as_bytes(&self) -> &[u8] { &self.raw }
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.raw
+    }
 
     /// Returns the chunk ID as an array of bytes.
-    pub const fn as_raw(self) -> [u8; 4] { self.raw }
+    pub const fn as_raw(self) -> [u8; 4] {
+        self.raw
+    }
 
     /// Returns the chunk ID as a string.
-    pub fn as_str(&self) -> &str { std::str::from_utf8(&self.raw).unwrap() }
+    pub fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.raw).unwrap()
+    }
 }
 
 impl ChunkId {
     const fn from_unchecked(s: &str) -> ChunkId {
         let bytes = s.as_bytes();
-        ChunkId { raw: [bytes[0], bytes[1], bytes[2], bytes[3]] }
+        ChunkId {
+            raw: [bytes[0], bytes[1], bytes[2], bytes[3]],
+        }
     }
 }
 
 impl AsRef<[u8]> for ChunkId {
-    fn as_ref(&self) -> &[u8] { self.as_bytes() }
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
 }
 
 impl AsRef<str> for ChunkId {
-    fn as_ref(&self) -> &str { self.as_str() }
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
 }
 
 impl Display for ChunkId {
@@ -59,15 +71,21 @@ impl Display for ChunkId {
 }
 
 impl Into<[u8; 4]> for ChunkId {
-    fn into(self) -> [u8; 4] { self.as_raw() }
+    fn into(self) -> [u8; 4] {
+        self.as_raw()
+    }
 }
 
 impl Into<Vec<u8>> for ChunkId {
-    fn into(self) -> Vec<u8> { Vec::from(self.as_bytes()) }
+    fn into(self) -> Vec<u8> {
+        Vec::from(self.as_bytes())
+    }
 }
 
 impl Into<String> for ChunkId {
-    fn into(self) -> String { String::from(self.as_str()) }
+    fn into(self) -> String {
+        String::from(self.as_str())
+    }
 }
 
 impl<'a> TryFrom<[u8; 4]> for ChunkId {
@@ -121,17 +139,26 @@ impl InvalidChunkId {
 impl Display for InvalidChunkId {
     fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
         match *self {
-            InvalidChunkId::Bytes(bytes) => write!(fmt, "{}: {:02x} {:02x} {:02x} {:02x}",
-                                                   Self::DESCRIPTION,
-                                                   bytes[0], bytes[1], bytes[2], bytes[3]),
-            InvalidChunkId::Length(len) => write!(fmt, "{}: invalid length: {}",
-                                                  Self::DESCRIPTION, len),
+            InvalidChunkId::Bytes(bytes) => write!(
+                fmt,
+                "{}: {:02x} {:02x} {:02x} {:02x}",
+                Self::DESCRIPTION,
+                bytes[0],
+                bytes[1],
+                bytes[2],
+                bytes[3]
+            ),
+            InvalidChunkId::Length(len) => {
+                write!(fmt, "{}: invalid length: {}", Self::DESCRIPTION, len)
+            },
         }
     }
 }
 
 impl Error for InvalidChunkId {
-    fn description(&self) -> &str { Self::DESCRIPTION }
+    fn description(&self) -> &str {
+        Self::DESCRIPTION
+    }
 }
 
 /// Writes PNG chunks.

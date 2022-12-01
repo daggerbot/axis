@@ -19,35 +19,50 @@ impl<T> Rect<T> {
     /// Returns `&self.1.y - &self.0.y`.
     /// If the rectangle is not ordered (see `is_ordered()` and `is_partially_ordered()`, this value
     /// may be negative or underflow.
-    pub fn height<'a>(&'a self) -> <&'a T as Sub>::Output where &'a T: Sub {
+    pub fn height<'a>(&'a self) -> <&'a T as Sub>::Output
+    where
+        &'a T: Sub,
+    {
         &self.1.y - &self.0.y
     }
 
     /// Determines whether the rectangle is *ordered* using `Ord`.
     /// A rectangle is *ordered* if `self.0.x <= self.1.x && self.0.y <= self.1.y`.
     /// That is, components on a given axis are in order.
-    pub fn is_ordered(&self) -> bool where T: Ord {
+    pub fn is_ordered(&self) -> bool
+    where
+        T: Ord,
+    {
         self.is_partially_ordered()
     }
 
     /// Determines whether the rectangle is *ordered* using `PartialOrd`.
     /// A rectangle is *ordered* if `self.0.x <= self.1.x && self.0.y <= self.1.y`.
     /// That is, components on a given axis are in order.
-    pub fn is_partially_ordered(&self) -> bool where T: PartialOrd {
+    pub fn is_partially_ordered(&self) -> bool
+    where
+        T: PartialOrd,
+    {
         self.0.x <= self.1.x && self.0.y <= self.1.y
     }
 
     /// Determines whether the rectangle is *positive* using `PartialOrd`.
     /// A rectangle is *positive* if `self.0.x < self.1.x && self.0.y < self.1.y`.
     /// That is, components are ordered and have a positive difference.
-    pub fn is_partially_positive(&self) -> bool where T: PartialOrd {
+    pub fn is_partially_positive(&self) -> bool
+    where
+        T: PartialOrd,
+    {
         self.0.x < self.1.x && self.0.y < self.1.y
     }
 
     /// Determines whether the rectangle is *positive* using `Ord`.
     /// A rectangle is *positive* if `self.0.x < self.1.x && self.0.y < self.1.y`.
     /// That is, components are ordered and have a positive difference.
-    pub fn is_positive(&self) -> bool where T: Ord {
+    pub fn is_positive(&self) -> bool
+    where
+        T: Ord,
+    {
         self.is_partially_ordered()
     }
 
@@ -59,14 +74,20 @@ impl<T> Rect<T> {
     /// Returns `Vector2::new(self.width(), self.height())`.
     /// If the rectangle is not ordered (see `is_ordered()` and `is_partially_ordered()`, these
     /// values may be negative or underflow.
-    pub fn size<'a>(&'a self) -> Vector2<<&'a T as Sub>::Output> where &'a T: Sub {
+    pub fn size<'a>(&'a self) -> Vector2<<&'a T as Sub>::Output>
+    where
+        &'a T: Sub,
+    {
         Vector2::new(self.width(), self.height())
     }
 
     /// Returns `&self.1.x - &self.0.x`.
     /// If the rectangle is not ordered (see `is_ordered()` and `is_partially_ordered()`, this value
     /// may be negative or underflow.
-    pub fn width<'a>(&'a self) -> <&'a T as Sub>::Output where &'a T: Sub {
+    pub fn width<'a>(&'a self) -> <&'a T as Sub>::Output
+    where
+        &'a T: Sub,
+    {
         &self.1.x - &self.0.x
     }
 }

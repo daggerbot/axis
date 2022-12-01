@@ -40,42 +40,62 @@ impl<T> From<T> for Alpha<T> {
 
 impl<T> From<[T; 1]> for Alpha<T> {
     fn from(a: [T; 1]) -> Alpha<T> {
-        Alpha { a: a.into_iter().next().unwrap() }
+        Alpha {
+            a: a.into_iter().next().unwrap(),
+        }
     }
 }
 
-impl<T> FromColor<bool> for Alpha<T> where bool: IntoComponent<T> {
+impl<T> FromColor<bool> for Alpha<T>
+where
+    bool: IntoComponent<T>,
+{
     fn from_color(other: bool) -> Alpha<T> {
-        Alpha { a: other.into_component() }
+        Alpha {
+            a: other.into_component(),
+        }
     }
 }
 
 impl<T, F: IntoComponent<T>> FromColor<Alpha<F>> for Alpha<T> {
     fn from_color(other: Alpha<F>) -> Alpha<T> {
-        Alpha { a: other.a.into_component() }
+        Alpha {
+            a: other.a.into_component(),
+        }
     }
 }
 
-impl<T> FromColorLossy<bool> for Alpha<T> where bool: IntoComponentLossy<T> {
+impl<T> FromColorLossy<bool> for Alpha<T>
+where
+    bool: IntoComponentLossy<T>,
+{
     fn from_color_lossy(other: bool) -> Alpha<T> {
-        Alpha { a: other.into_component_lossy() }
+        Alpha {
+            a: other.into_component_lossy(),
+        }
     }
 }
 
 impl<T, F: IntoComponentLossy<T>> FromColorLossy<Alpha<F>> for Alpha<T> {
     fn from_color_lossy(other: Alpha<F>) -> Alpha<T> {
-        Alpha { a: other.a.into_component_lossy() }
+        Alpha {
+            a: other.a.into_component_lossy(),
+        }
     }
 }
 
 impl<T, F: IntoComponentLossy<T>> FromColorLossy<Rgba<F>> for Alpha<T> {
     fn from_color_lossy(other: Rgba<F>) -> Alpha<T> {
-        Alpha { a: other.a.into_component_lossy() }
+        Alpha {
+            a: other.a.into_component_lossy(),
+        }
     }
 }
 
 impl<T> Into<[T; 1]> for Alpha<T> {
-    fn into(self) -> [T; 1] { [self.a] }
+    fn into(self) -> [T; 1] {
+        [self.a]
+    }
 }
 
 impl<T> IntoIterator for Alpha<T> {

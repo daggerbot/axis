@@ -23,15 +23,23 @@ impl<'a, I: 'a + Image> Image for Subimage<'a, I> {
         self.parent.get_pixel_unchecked(pos + self.region.0)
     }
 
-    fn height(&self) -> usize { self.region.height() }
-
-    fn size(&self) -> Vector2<usize> { self.region.size() }
-
-    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
-        Ok(self.parent.get_pixel(self.check_pixel_pos(pos)? + self.region.0))
+    fn height(&self) -> usize {
+        self.region.height()
     }
 
-    fn width(&self) -> usize { self.region.width() }
+    fn size(&self) -> Vector2<usize> {
+        self.region.size()
+    }
+
+    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
+        Ok(self
+            .parent
+            .get_pixel(self.check_pixel_pos(pos)? + self.region.0))
+    }
+
+    fn width(&self) -> usize {
+        self.region.width()
+    }
 }
 
 /// Mutable view of a portion of another `ImageMut`.
@@ -47,15 +55,23 @@ impl<'a, I: 'a + Image> Image for SubimageMut<'a, I> {
         self.parent.get_pixel_unchecked(pos + self.region.0)
     }
 
-    fn height(&self) -> usize { self.region.height() }
-
-    fn size(&self) -> Vector2<usize> { self.region.size() }
-
-    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
-        Ok(self.parent.get_pixel(self.check_pixel_pos(pos)? + self.region.0))
+    fn height(&self) -> usize {
+        self.region.height()
     }
 
-    fn width(&self) -> usize { self.region.width() }
+    fn size(&self) -> Vector2<usize> {
+        self.region.size()
+    }
+
+    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
+        Ok(self
+            .parent
+            .get_pixel(self.check_pixel_pos(pos)? + self.region.0))
+    }
+
+    fn width(&self) -> usize {
+        self.region.width()
+    }
 }
 
 impl<'a, I: 'a + ImageMut> ImageMut for SubimageMut<'a, I> {
@@ -65,10 +81,11 @@ impl<'a, I: 'a + ImageMut> ImageMut for SubimageMut<'a, I> {
         self.parent.set_pixel_unchecked(pos + self.region.0, pixel);
     }
 
-    fn try_set_pixel(&mut self, pos: Vector2<usize>, pixel: I::PixelValue)
-        -> Result<(), OutOfBounds>
-    {
-        self.parent.set_pixel(self.check_pixel_pos(pos)? + self.region.0, pixel);
+    fn try_set_pixel(
+        &mut self, pos: Vector2<usize>, pixel: I::PixelValue,
+    ) -> Result<(), OutOfBounds> {
+        self.parent
+            .set_pixel(self.check_pixel_pos(pos)? + self.region.0, pixel);
         Ok(())
     }
 }

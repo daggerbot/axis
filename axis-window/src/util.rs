@@ -25,12 +25,16 @@ impl<T: 'static + Sized> CBox<T> {
 #[cfg(feature = "libc")]
 impl<T: 'static + ?Sized> std::ops::Deref for CBox<T> {
     type Target = T;
-    fn deref(&self) -> &T { self.data }
+    fn deref(&self) -> &T {
+        self.data
+    }
 }
 
 #[cfg(feature = "libc")]
 impl<T: 'static + ?Sized> std::ops::DerefMut for CBox<T> {
-    fn deref_mut(&mut self) -> &mut T { self.data }
+    fn deref_mut(&mut self) -> &mut T {
+        self.data
+    }
 }
 
 #[cfg(feature = "libc")]
@@ -44,7 +48,13 @@ impl<T: 'static + ?Sized> Drop for CBox<T> {
 
 /// Clamps a value within a range. The result is undefined if `min` > `max`.
 pub fn clamp<T: Ord>(x: T, min: T, max: T) -> T {
-    if x < min { min } else if x > max { max } else { x }
+    if x < min {
+        min
+    } else if x > max {
+        max
+    } else {
+        x
+    }
 }
 
 /// Generic implementation of ISO C's `strlen()`.

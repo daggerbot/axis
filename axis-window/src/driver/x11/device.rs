@@ -27,31 +27,35 @@ pub struct Device<W: 'static + Clone> {
 
 impl<W: 'static + Clone> Device<W> {
     /// Returns the underlying X connection.
-    pub fn connection(&self) -> &Rc<Connection> { &self.connection }
+    pub fn connection(&self) -> &Rc<Connection> {
+        &self.connection
+    }
 
     /// Returns the XID for the visual used by the root window.
     pub fn root_visual_id(&self) -> u32 {
-        unsafe {
-            (*self.screen_ptr).root_visual
-        }
+        unsafe { (*self.screen_ptr).root_visual }
     }
 
     /// Returns the XID of the root window.
     pub fn root_window_id(&self) -> u32 {
-        unsafe {
-            (*self.screen_ptr).root
-        }
+        unsafe { (*self.screen_ptr).root }
     }
 
     /// Returns the X screen index.
-    pub fn screen_index(&self) -> u8 { self.screen_index }
+    pub fn screen_index(&self) -> u8 {
+        self.screen_index
+    }
 
     /// Returns the underlying XCB screen structure pointer.
-    pub fn xcb_screen_ptr(&self) -> *mut xcb_sys::xcb_screen_t { self.screen_ptr }
+    pub fn xcb_screen_ptr(&self) -> *mut xcb_sys::xcb_screen_t {
+        self.screen_ptr
+    }
 }
 
 impl<W: 'static + Clone> Device<W> {
-    pub(crate) fn window_manager(&self) -> &Rc<RefCell<WindowManager<W>>> { &self.window_manager }
+    pub(crate) fn window_manager(&self) -> &Rc<RefCell<WindowManager<W>>> {
+        &self.window_manager
+    }
 }
 
 impl<W: 'static + Clone> Eq for Device<W> {}

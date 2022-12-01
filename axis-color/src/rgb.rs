@@ -24,9 +24,14 @@ impl<T> Color for Red<T> {
     const NUM_COMPONENTS: usize = 1;
 }
 
-impl<T> FromColor<bool> for Red<T> where bool: IntoComponent<T> {
+impl<T> FromColor<bool> for Red<T>
+where
+    bool: IntoComponent<T>,
+{
     fn from_color(other: bool) -> Red<T> {
-        Red { r: other.into_component() }
+        Red {
+            r: other.into_component(),
+        }
     }
 }
 
@@ -38,9 +43,14 @@ impl<T, F: IntoComponent<T>> FromColor<Lum<F>> for Red<T> {
     }
 }
 
-impl<T> FromColorLossy<bool> for Red<T> where bool: IntoComponentLossy<T> {
+impl<T> FromColorLossy<bool> for Red<T>
+where
+    bool: IntoComponentLossy<T>,
+{
     fn from_color_lossy(other: bool) -> Red<T> {
-        Red { r: other.into_component_lossy() }
+        Red {
+            r: other.into_component_lossy(),
+        }
     }
 }
 
@@ -114,10 +124,7 @@ impl<T> Color for Rg<T> {
 impl<T: Clone, F: IntoComponent<T>> FromColor<Lum<F>> for Rg<T> {
     fn from_color(other: Lum<F>) -> Rg<T> {
         let l = other.l.into_component();
-        Rg {
-            r: l.clone(),
-            g: l,
-        }
+        Rg { r: l.clone(), g: l }
     }
 }
 
@@ -133,20 +140,14 @@ impl<T: Component, F: IntoComponent<T>> FromColor<Red<F>> for Rg<T> {
 impl<T: Clone, F: IntoComponentLossy<T>> FromColorLossy<Lum<F>> for Rg<T> {
     fn from_color_lossy(other: Lum<F>) -> Rg<T> {
         let l = other.l.into_component_lossy();
-        Rg {
-            r: l.clone(),
-            g: l,
-        }
+        Rg { r: l.clone(), g: l }
     }
 }
 
 impl<T: Clone, F: IntoComponentLossy<T>> FromColorLossy<LumAlpha<F>> for Rg<T> {
     fn from_color_lossy(other: LumAlpha<F>) -> Rg<T> {
         let l = other.l.into_component_lossy();
-        Rg {
-            r: l.clone(),
-            g: l,
-        }
+        Rg { r: l.clone(), g: l }
     }
 }
 
@@ -178,7 +179,9 @@ impl<T, F: IntoComponentLossy<T>> FromColorLossy<Rgba<F>> for Rg<T> {
 }
 
 impl<T> Into<(T, T)> for Rg<T> {
-    fn into(self) -> (T, T) { (self.r, self.g) }
+    fn into(self) -> (T, T) {
+        (self.r, self.g)
+    }
 }
 
 impl_scalar_ops! {
@@ -289,7 +292,9 @@ impl<T, F: IntoComponentLossy<T>> FromColorLossy<Rgba<F>> for Rgb<T> {
 }
 
 impl<T> Into<(T, T, T)> for Rgb<T> {
-    fn into(self) -> (T, T, T) { (self.r, self.g, self.b) }
+    fn into(self) -> (T, T, T) {
+        (self.r, self.g, self.b)
+    }
 }
 
 impl_scalar_ops! {
@@ -432,7 +437,9 @@ impl<T: Component, F: IntoComponentLossy<T>> FromColorLossy<Rgb<F>> for Rgba<T> 
 }
 
 impl<T> Into<(T, T, T, T)> for Rgba<T> {
-    fn into(self) -> (T, T, T, T) { (self.r, self.g, self.b, self.a) }
+    fn into(self) -> (T, T, T, T) {
+        (self.r, self.g, self.b, self.a)
+    }
 }
 
 macro_rules! impl_all {

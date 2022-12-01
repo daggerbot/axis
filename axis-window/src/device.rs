@@ -50,7 +50,9 @@ pub trait IAnyDevice: Any {
 impl<T: IDevice> IAnyDevice for T {
     type WindowId = <T::Context as IContext>::WindowId;
 
-    fn any(&self) -> &dyn Any { self }
+    fn any(&self) -> &dyn Any {
+        self
+    }
 
     fn default_pixel_format(&self) -> PixelFormat {
         PixelFormat(Rc::new(IDevice::default_pixel_format(self)))
@@ -68,8 +70,9 @@ impl<T: IDevice> IAnyDevice for T {
     }
 
     fn pixel_formats(&self) -> PixelFormats {
-        PixelFormats(Box::new(IDevice::pixel_formats(self)
-                              .map(|pixel_format| PixelFormat(Rc::new(pixel_format)))))
+        PixelFormats(Box::new(
+            IDevice::pixel_formats(self).map(|pixel_format| PixelFormat(Rc::new(pixel_format))),
+        ))
     }
 }
 

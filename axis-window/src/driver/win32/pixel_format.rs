@@ -14,11 +14,16 @@ use crate::pixel_format::IPixelFormat;
 #[derive(Clone)]
 pub enum PixelFormat {
     Default,
-    Gdi { index: c_int, pfd: winapi::um::wingdi::PIXELFORMATDESCRIPTOR },
+    Gdi {
+        index: c_int,
+        pfd: winapi::um::wingdi::PIXELFORMATDESCRIPTOR,
+    },
 }
 
 impl Default for PixelFormat {
-    fn default() -> PixelFormat { PixelFormat::Default }
+    fn default() -> PixelFormat {
+        PixelFormat::Default
+    }
 }
 
 impl Eq for PixelFormat {}
@@ -29,8 +34,16 @@ impl PartialEq for PixelFormat {
     fn eq(&self, rhs: &PixelFormat) -> bool {
         match (self, rhs) {
             (&PixelFormat::Default, &PixelFormat::Default) => true,
-            (&PixelFormat::Gdi { index: index0, pfd: pfd0 },
-             &PixelFormat::Gdi { index: index1, pfd: pfd1 }) => {
+            (
+                &PixelFormat::Gdi {
+                    index: index0,
+                    pfd: pfd0,
+                },
+                &PixelFormat::Gdi {
+                    index: index1,
+                    pfd: pfd1,
+                },
+            ) => {
                 index0 == index1
                     && pfd0.nSize == pfd1.nSize
                     && pfd0.nVersion == pfd1.nVersion

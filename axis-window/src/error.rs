@@ -60,21 +60,32 @@ impl Error {
     }
 
     /// Returns the error kind.
-    pub fn kind(&self) -> ErrorKind { self.kind }
+    pub fn kind(&self) -> ErrorKind {
+        self.kind
+    }
 
     /// Sets the detail string to a static string.
     pub fn with_detail(self, detail: &'static str) -> Error {
-        Error { detail: Some(Cow::Borrowed(detail)), ..self }
+        Error {
+            detail: Some(Cow::Borrowed(detail)),
+            ..self
+        }
     }
 
     /// Sets the detail string to an owned string.
     pub fn with_detail_string(self, detail: String) -> Error {
-        Error { detail: Some(Cow::Owned(detail)), ..self }
+        Error {
+            detail: Some(Cow::Owned(detail)),
+            ..self
+        }
     }
 
     /// Sets the source error.
     pub fn with_source<E: 'static + Send + Sync + std::error::Error>(self, source: E) -> Error {
-        Error { source: Some(Box::new(source)), ..self }
+        Error {
+            source: Some(Box::new(source)),
+            ..self
+        }
     }
 }
 
@@ -120,7 +131,9 @@ impl<T> From<std::sync::PoisonError<T>> for Error {
 }
 
 impl std::error::Error for Error {
-    fn description(&self) -> &str { self.kind.description() }
+    fn description(&self) -> &str {
+        self.kind.description()
+    }
 
     fn source(&self) -> Option<&(dyn 'static + std::error::Error)> {
         match self.source {

@@ -77,16 +77,22 @@ impl Image for Bitmap {
         (self.buf[index] & (1 << shift)) != 0
     }
 
-    fn height(&self) -> usize { self.size.y }
+    fn height(&self) -> usize {
+        self.size.y
+    }
 
-    fn size(&self) -> Vector2<usize> { self.size }
+    fn size(&self) -> Vector2<usize> {
+        self.size
+    }
 
     fn try_get_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<bool, OutOfBounds> {
         let (index, shift) = self.try_pixel_index(pos)?;
         Ok((self.buf[index] & (1 << shift)) != 0)
     }
 
-    fn width(&self) -> usize { self.size.x }
+    fn width(&self) -> usize {
+        self.size.x
+    }
 }
 
 impl ImageMut for Bitmap {

@@ -23,19 +23,23 @@ pub struct PixelFormat {
 
 impl PixelFormat {
     /// Returns the underlying X connection.
-    pub fn connection(&self) -> &Rc<Connection> { &self.connection }
+    pub fn connection(&self) -> &Rc<Connection> {
+        &self.connection
+    }
 
     /// Returns the depth of the visual.
-    pub fn depth(&self) -> u8 { self.depth }
+    pub fn depth(&self) -> u8 {
+        self.depth
+    }
 
     /// Returns the index of the screen that visual pertains to.
-    pub fn screen_index(&self) -> u8 { self.screen_index }
+    pub fn screen_index(&self) -> u8 {
+        self.screen_index
+    }
 
     /// Returns the visual's XID.
     pub fn visual_id(&self) -> u32 {
-        unsafe {
-            (*self.visual_ptr).visual_id
-        }
+        unsafe { (*self.visual_ptr).visual_id }
     }
 }
 

@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
-use byteorder::{BE, WriteBytesExt};
+use byteorder::{WriteBytesExt, BE};
 use color::Rgb;
 use math::{TryFromComposite, Vector2};
 
@@ -21,15 +21,8 @@ use crate::codec::png::filter::BaseFilterer;
 use crate::codec::png::interlace::{Interlacer, InterlacerItem};
 use crate::codec::png::pixel::PixelPacker;
 use crate::codec::png::{
-    ChunkId,
-    ChunkWriter,
-    ColorType,
-    CompressionMethod,
-    FilterMethod,
-    Header,
-    InterlaceMethod,
-    InvalidBitDepth,
-    Pixel,
+    ChunkId, ChunkWriter, ColorType, CompressionMethod, FilterMethod, Header, InterlaceMethod,
+    InvalidBitDepth, Pixel,
 };
 use crate::image::Image;
 
@@ -76,9 +69,9 @@ where
     }
 
     /// Changes the encoder's interlace method.
-    pub fn with_interlace_method(&mut self, interlace_method: Option<InterlaceMethod>)
-        -> &mut Self
-    {
+    pub fn with_interlace_method(
+        &mut self, interlace_method: Option<InterlaceMethod>,
+    ) -> &mut Self {
         self.interlace_method = interlace_method;
         self
     }
@@ -86,7 +79,9 @@ where
     /// Changes the encoder's palette. This is ignored if the color type is not indexed.
     pub fn with_palette(&mut self, palette: &'p [Rgb<u8>]) -> Result<&mut Self, EncoderError> {
         if palette.is_empty() || palette.len() > MAX_PALETTE_LEN {
-            return Err(EncoderError::InvalidPaletteLen { palette_len: palette.len() });
+            return Err(EncoderError::InvalidPaletteLen {
+                palette_len: palette.len(),
+            });
         }
         self.palette = Some(palette);
         Ok(self)
@@ -105,8 +100,14 @@ where
             }
         }
 
-        write_IDAT(w, self.image, self.bit_depth, self.compression_method, self.filter_method,
-                   self.interlace_method)?;
+        write_IDAT(
+            w,
+            self.image,
+            self.bit_depth,
+            self.compression_method,
+            self.filter_method,
+            self.interlace_method,
+        )?;
         write_IEND(w)?;
         Ok(())
     }
@@ -145,9 +146,7 @@ impl Display for EncoderError {
             EncoderError::IoError { ref source } => {
                 write!(fmt, "{}", source)
             },
-            EncoderError::MissingPalette => {
-                fmt.write_str("missing palette")
-            },
+            EncoderError::MissingPalette => fmt.write_str("missing palette"),
         }
     }
 }
@@ -183,10 +182,10 @@ pub fn write_IEND<W: Write>(w: &mut W) -> Result<(), EncoderError> {
 
 /// Writes the PNG `IDAT` pixel data chunk(s).
 #[allow(non_snake_case)]
-pub fn write_IDAT<'a, W, I>(w: &mut W, image: &'a I, bit_depth: u8,
-    compression_method: CompressionMethod, _filter_method: FilterMethod,
-    interlace_method: Option<InterlaceMethod>)
-    -> Result<(), EncoderError>
+pub fn write_IDAT<'a, W, I>(
+    w: &mut W, image: &'a I, bit_depth: u8, compression_method: CompressionMethod,
+    _filter_method: FilterMethod, interlace_method: Option<InterlaceMethod>,
+) -> Result<(), EncoderError>
 where
     W: Write,
     I: Image,
@@ -194,16 +193,24 @@ where
 {
     let chunk = ChunkWriter::new_progressive(w, ChunkId::IDAT, MAX_IDAT_SIZE);
     let mut compress = Compressor::new(chunk, compression_method);
-    let mut filter = BaseFilterer::new(compress, image.size(), bit_depth,
-                                       <I::Pixel<'a> as Pixel>::COLOR_TYPE);
+    let mut filter = BaseFilterer::new(
+        compress,
+        image.size(),
+        bit_depth,
+        <I::Pixel<'a> as Pixel>::COLOR_TYPE,
+    );
     let mut packer = PixelPacker::new(filter, bit_depth);
 
     for item in Interlacer::new(image.size(), interlace_method) {
         match item {
             InterlacerItem::BeginPass { size } => {
                 compress = packer.finish()?.finish();
-                filter = BaseFilterer::new(compress, size, bit_depth,
-                                           <I::Pixel<'a> as Pixel>::COLOR_TYPE);
+                filter = BaseFilterer::new(
+                    compress,
+                    size,
+                    bit_depth,
+                    <I::Pixel<'a> as Pixel>::COLOR_TYPE,
+                );
                 packer = PixelPacker::new(filter, bit_depth);
             },
             InterlacerItem::Pixel { pos } => {
@@ -221,10 +228,16 @@ where
 pub fn write_IHDR<W: Write>(w: &mut W, header: &Header) -> Result<(), EncoderError> {
     let size: Vector2<u32> = match TryFromComposite::try_from_composite(header.image_size) {
         Ok(size) => size,
-        Err(_) => return Err(EncoderError::InvalidImageSize { image_size: header.image_size }),
+        Err(_) => {
+            return Err(EncoderError::InvalidImageSize {
+                image_size: header.image_size,
+            })
+        },
     };
     if size.x == 0 || size.x > MAX_DIMENSION || size.y == 0 || size.y > MAX_DIMENSION {
-        return Err(EncoderError::InvalidImageSize { image_size: header.image_size });
+        return Err(EncoderError::InvalidImageSize {
+            image_size: header.image_size,
+        });
     }
     header.color_type.check_bit_depth(header.bit_depth)?;
 
@@ -244,7 +257,9 @@ pub fn write_IHDR<W: Write>(w: &mut W, header: &Header) -> Result<(), EncoderErr
 #[allow(non_snake_case)]
 pub fn write_PLTE<W: Write>(w: &mut W, palette: &[Rgb<u8>]) -> Result<(), EncoderError> {
     if palette.is_empty() || palette.len() > MAX_PALETTE_LEN {
-        return Err(EncoderError::InvalidPaletteLen { palette_len: palette.len() });
+        return Err(EncoderError::InvalidPaletteLen {
+            palette_len: palette.len(),
+        });
     }
 
     let mut chunk = ChunkWriter::new(w, ChunkId::PLTE);

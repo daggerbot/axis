@@ -16,13 +16,7 @@ mod pixel;
 pub use self::chunk::{ChunkId, ChunkWriter, InvalidChunkId};
 pub use self::compress::{CompressionMethod, InvalidCompressionMethod};
 pub use self::encode::{
-    Encoder,
-    EncoderError,
-    write_IDAT,
-    write_IEND,
-    write_IHDR,
-    write_PLTE,
-    write_signature,
+    write_IDAT, write_IEND, write_IHDR, write_PLTE, write_signature, Encoder, EncoderError,
 };
 pub use self::filter::{FilterMethod, InvalidFilterMethod};
 pub use self::interlace::{InterlaceMethod, InvalidInterlaceMethod};

@@ -7,7 +7,7 @@
  */
 
 use std::cell::RefCell;
-use std::ffi::{CString, c_char};
+use std::ffi::{c_char, CString};
 use std::marker::PhantomData;
 use std::os::unix::io::{AsFd, BorrowedFd};
 use std::rc::Rc;
@@ -28,7 +28,9 @@ pub struct Connection {
 
 impl Connection {
     /// Returns the index of the default screen.
-    pub fn default_screen_index(&self) -> u8 { self.default_screen_index }
+    pub fn default_screen_index(&self) -> u8 {
+        self.default_screen_index
+    }
 
     /// Opens a connection to the specified X server.
     ///
@@ -36,26 +38,26 @@ impl Connection {
     pub fn open<S: Into<Vec<u8>>>(name: S) -> Result<Connection> {
         let c_name = CString::new(name)?;
 
-        unsafe {
-            Connection::open_raw(c_name.as_ptr())
-        }
+        unsafe { Connection::open_raw(c_name.as_ptr()) }
     }
 
     /// Opens a connection to the default X server.
     ///
     /// If the `x11-sys` feature is enabled, the Xlib API owns the event queue by default.
     pub fn open_default() -> Result<Connection> {
-        unsafe {
-            Connection::open_raw(std::ptr::null())
-        }
+        unsafe { Connection::open_raw(std::ptr::null()) }
     }
 
     /// Returns a pointer to the underlying XCB connection.
-    pub fn xcb_connection_ptr(&self) -> *mut xcb_sys::xcb_connection_t { self.xcb }
+    pub fn xcb_connection_ptr(&self) -> *mut xcb_sys::xcb_connection_t {
+        self.xcb
+    }
 
     /// Returns a pointer to the underlying Xlib display connection.
     #[cfg(feature = "x11-sys")]
-    pub fn xlib_display_ptr(&self) -> *mut x11_sys::Display { self.xlib }
+    pub fn xlib_display_ptr(&self) -> *mut x11_sys::Display {
+        self.xlib
+    }
 }
 
 impl Connection {
@@ -92,9 +94,7 @@ impl Connection {
 
 impl AsFd for Connection {
     fn as_fd(&self) -> BorrowedFd {
-        unsafe {
-            BorrowedFd::borrow_raw(xcb_sys::xcb_get_file_descriptor(self.xcb))
-        }
+        unsafe { BorrowedFd::borrow_raw(xcb_sys::xcb_get_file_descriptor(self.xcb)) }
     }
 }
 
@@ -129,7 +129,9 @@ pub struct Context<W: 'static + Clone> {
 
 impl<W: 'static + Clone> Context<W> {
     /// Returns the underlying X connection.
-    pub fn connection(&self) -> &Rc<Connection> { &self.connection }
+    pub fn connection(&self) -> &Rc<Connection> {
+        &self.connection
+    }
 
     /// Opens a connection to the specified X server.
     pub fn open<S: Into<Vec<u8>>>(name: S) -> Result<Context<W>> {
@@ -143,7 +145,9 @@ impl<W: 'static + Clone> Context<W> {
 }
 
 impl<W: 'static + Clone> Context<W> {
-    pub(crate) fn window_manager(&self) -> &Rc<RefCell<WindowManager<W>>> { &self.window_manager }
+    pub(crate) fn window_manager(&self) -> &Rc<RefCell<WindowManager<W>>> {
+        &self.window_manager
+    }
 }
 
 impl<W: 'static + Clone> Context<W> {
@@ -151,8 +155,10 @@ impl<W: 'static + Clone> Context<W> {
     fn init(connection: Connection) -> Result<Context<W>> {
         #[cfg(feature = "x11-sys")]
         unsafe {
-            x11_sys::XSetEventQueueOwner(connection.xlib,
-                                         x11_sys::XEventQueueOwner_XCBOwnsEventQueue);
+            x11_sys::XSetEventQueueOwner(
+                connection.xlib,
+                x11_sys::XEventQueueOwner_XCBOwnsEventQueue,
+            );
         }
 
         Ok(Context {

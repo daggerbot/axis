@@ -50,12 +50,16 @@ fn colorize(n: Option<u32>) -> Rgb<u8> {
 }
 
 fn main() {
-    let manifest_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR")
-                                     .expect("missing CARGO_MANIFEST_DIR"));
+    let manifest_dir =
+        PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("missing CARGO_MANIFEST_DIR"));
     let out_dir = manifest_dir.join("output");
     let out_path = out_dir.join("mandelbrot.png");
 
-    let _ = writeln!(std::io::stderr(), "saving mandelbrot to '{}'...", out_path.display());
+    let _ = writeln!(
+        std::io::stderr(),
+        "saving mandelbrot to '{}'...",
+        out_path.display()
+    );
 
     std::fs::create_dir_all(&out_dir).expect("can't create output directory");
     image::generate(IMAGE_SIZE, |pos| colorize(mandelbrot(transform(pos))))

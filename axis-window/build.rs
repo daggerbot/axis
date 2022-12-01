@@ -7,8 +7,11 @@
  */
 
 fn main() {
-    match std::env::var("CARGO_CFG_TARGET_OS").expect("missing CARGO_CFG_TARGET_OS").as_str() {
-        "dragonfly" | "freebsd" | "netbsd" |"openbsd" => {
+    match std::env::var("CARGO_CFG_TARGET_OS")
+        .expect("missing CARGO_CFG_TARGET_OS")
+        .as_str()
+    {
+        "dragonfly" | "freebsd" | "netbsd" | "openbsd" => {
             if std::env::var_os("CARGO_FEATURE_X11_DRIVER").is_some() {
                 println!("cargo:rustc-cfg=x11_enabled");
             }

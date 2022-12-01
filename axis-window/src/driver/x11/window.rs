@@ -12,13 +12,13 @@ use std::rc::Rc;
 
 use math::Vector2;
 
-use crate::IDevice;
 use crate::driver::x11::context::{Connection, Context};
 use crate::driver::x11::device::Device;
 use crate::driver::x11::pixel_format::PixelFormat;
 use crate::error::Result;
 use crate::util::clamp;
 use crate::window::{IWindow, IWindowBuilder, WindowPos};
+use crate::IDevice;
 
 /// Parameters for creating an X11 window.
 pub struct WindowBuilder<W: 'static + Clone> {
@@ -30,10 +30,14 @@ pub struct WindowBuilder<W: 'static + Clone> {
 
 impl<W: 'static + Clone> WindowBuilder<W> {
     /// Returns the underlying X connection.
-    pub fn connection(&self) -> &Rc<Connection> { self.device.connection() }
+    pub fn connection(&self) -> &Rc<Connection> {
+        self.device.connection()
+    }
 
     /// Returns the device on which the window is to be created.
-    pub fn device(&self) -> &Device<W> { &self.device }
+    pub fn device(&self) -> &Device<W> {
+        &self.device
+    }
 }
 
 impl<W: 'static + Clone> WindowBuilder<W> {
@@ -54,35 +58,44 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
         let connection = self.device.connection().clone();
         let xcb = connection.xcb_connection_ptr();
         let manager = self.device.window_manager().clone();
-        let pixel_format = self.pixel_format.clone()
-                           .unwrap_or_else(|| self.device.default_pixel_format());
+        let pixel_format = self
+            .pixel_format
+            .clone()
+            .unwrap_or_else(|| self.device.default_pixel_format());
         let pos = match self.pos {
-            WindowPos::Default => Vector2::new(0, 0), // TODO
+            WindowPos::Default => Vector2::new(0, 0),  // TODO
             WindowPos::Centered => Vector2::new(0, 0), // TODO
-            WindowPos::Point(pos) => {
-                Vector2 {
-                    x: clamp(pos.x, -0x8000, 0x7fff) as i16,
-                    y: clamp(pos.y, -0x8000, 0x7fff) as i16,
-                }
+            WindowPos::Point(pos) => Vector2 {
+                x: clamp(pos.x, -0x8000, 0x7fff) as i16,
+                y: clamp(pos.y, -0x8000, 0x7fff) as i16,
             },
         };
         let size = match self.size {
             None => Vector2::new(640, 480), // TODO
-            Some(size) => {
-                Vector2 {
-                    x: clamp(size.x, 1, 0xffff) as u16,
-                    y: clamp(size.y, 1, 0xffff) as u16,
-                }
+            Some(size) => Vector2 {
+                x: clamp(size.x, 1, 0xffff) as u16,
+                y: clamp(size.y, 1, 0xffff) as u16,
             },
         };
         let xid;
 
         unsafe {
             xid = xcb_sys::xcb_generate_id(xcb);
-            xcb_sys::xcb_create_window(xcb, pixel_format.depth(), xid, self.device.root_window_id(),
-                                       pos.x, pos.y, size.x, size.y, 0,
-                                       xcb_sys::XCB_WINDOW_CLASS_INPUT_OUTPUT as u16,
-                                       pixel_format.visual_id(), 0, std::ptr::null());
+            xcb_sys::xcb_create_window(
+                xcb,
+                pixel_format.depth(),
+                xid,
+                self.device.root_window_id(),
+                pos.x,
+                pos.y,
+                size.x,
+                size.y,
+                0,
+                xcb_sys::XCB_WINDOW_CLASS_INPUT_OUTPUT as u16,
+                pixel_format.visual_id(),
+                0,
+                std::ptr::null(),
+            );
         }
 
         let shared = Rc::new(WindowShared {
@@ -131,7 +144,9 @@ pub struct Window<W: 'static + Clone> {
 
 impl<W: 'static + Clone> Window<W> {
     /// Returns the underlying X connection.
-    pub fn connection(&self) -> &Rc<Connection> { &self.connection }
+    pub fn connection(&self) -> &Rc<Connection> {
+        &self.connection
+    }
 }
 
 impl<W: 'static + Clone> Window<W> {
@@ -158,7 +173,13 @@ impl<W: 'static + Clone> Drop for Window<W> {
 impl<W: 'static + Clone> IWindow for Window<W> {
     type Context = Context<W>;
 
-    fn id(&self) -> &W { &self.shared.id }
-    fn is_alive(&self) -> bool { self.shared.xid.get().is_some() }
-    fn is_visible(&self) -> bool { self.shared.visible.get() }
+    fn id(&self) -> &W {
+        &self.shared.id
+    }
+    fn is_alive(&self) -> bool {
+        self.shared.xid.get().is_some()
+    }
+    fn is_visible(&self) -> bool {
+        self.shared.visible.get()
+    }
 }

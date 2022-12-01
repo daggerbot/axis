@@ -56,13 +56,17 @@ where
 
     fn div(self, rhs: Complex<T>) -> Self::Output {
         let d = rhs.0 * rhs.0 + rhs.1 * rhs.1;
-        Complex((self.0 * rhs.0 + self.1 * rhs.1) / d,
-                (self.1 * rhs.0 - self.0 * rhs.1) / d)
+        Complex(
+            (self.0 * rhs.0 + self.1 * rhs.1) / d,
+            (self.1 * rhs.0 - self.0 * rhs.1) / d,
+        )
     }
 }
 
 impl<T> From<Vector2<T>> for Complex<T> {
-    fn from(v: Vector2<T>) -> Complex<T> { Complex(v.x, v.y) }
+    fn from(v: Vector2<T>) -> Complex<T> {
+        Complex(v.x, v.y)
+    }
 }
 
 impl<T> Mul<T> for Complex<T>
@@ -83,7 +87,10 @@ where
     type Output = Complex<T>;
 
     fn mul(self, rhs: Complex<T>) -> Self::Output {
-        Complex(self.0 * rhs.0 - self.1 * rhs.1, self.0 * rhs.1 + self.1 * rhs.0)
+        Complex(
+            self.0 * rhs.0 - self.1 * rhs.1,
+            self.0 * rhs.1 + self.1 * rhs.0,
+        )
     }
 }
 

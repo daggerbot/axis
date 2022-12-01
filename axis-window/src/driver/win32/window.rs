@@ -18,7 +18,7 @@ use math::Vector2;
 use crate::driver::win32::context::Context;
 use crate::driver::win32::gdi::Dc;
 use crate::driver::win32::pixel_format::PixelFormat;
-use crate::driver::win32::util::{Win32Error, get_exe_handle};
+use crate::driver::win32::util::{get_exe_handle, Win32Error};
 use crate::error::{ErrorKind, Result};
 use crate::window::{IWindow, IWindowBuilder, WindowKind, WindowPos};
 use crate::Coord;
@@ -51,17 +51,25 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
 
     fn build(&self, id: W) -> Result<Window<W>> {
         let class_name_ptr = WINDOW_CLASS_MANAGER.lock()?.register::<W>()?;
-        let title: Vec<u16> = self.title.encode_utf16().chain(std::iter::once(0)).collect();
+        let title: Vec<u16> = self
+            .title
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
         let (style, ex_style) = match self.kind {
             WindowKind::Normal => (winapi::um::winuser::WS_OVERLAPPEDWINDOW, 0),
         };
         let pos = match self.pos {
-            WindowPos::Default => {
-                Vector2::new(winapi::um::winuser::CW_USEDEFAULT, winapi::um::winuser::CW_USEDEFAULT)
-            },
+            WindowPos::Default => Vector2::new(
+                winapi::um::winuser::CW_USEDEFAULT,
+                winapi::um::winuser::CW_USEDEFAULT,
+            ),
             WindowPos::Centered => {
                 // TODO
-                Vector2::new(winapi::um::winuser::CW_USEDEFAULT, winapi::um::winuser::CW_USEDEFAULT)
+                Vector2::new(
+                    winapi::um::winuser::CW_USEDEFAULT,
+                    winapi::um::winuser::CW_USEDEFAULT,
+                )
             },
             WindowPos::Point(pos) => pos,
         };
@@ -95,8 +103,19 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
 
         unsafe {
             hwnd = winapi::um::winuser::CreateWindowExW(
-                ex_style, class_name_ptr, title.as_ptr(), style, pos.x, pos.y, size.x, size.y,
-                std::ptr::null_mut(), std::ptr::null_mut(), hinstance, std::ptr::null_mut());
+                ex_style,
+                class_name_ptr,
+                title.as_ptr(),
+                style,
+                pos.x,
+                pos.y,
+                size.x,
+                size.y,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                hinstance,
+                std::ptr::null_mut(),
+            );
         }
 
         if hwnd.is_null() {
@@ -113,8 +132,10 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
         window.shared.set_pixel_format(&self.pixel_format)?;
 
         // So we can properly report events.
-        window.shared.set_window_long_ptr(winapi::um::winuser::GWLP_USERDATA,
-                                          Rc::into_raw(window.shared.clone()) as isize)?;
+        window.shared.set_window_long_ptr(
+            winapi::um::winuser::GWLP_USERDATA,
+            Rc::into_raw(window.shared.clone()) as isize,
+        )?;
         Ok(window)
     }
 }
@@ -145,15 +166,13 @@ impl<W: 'static + Clone> WindowShared<W> {
         }
     }
 
-    unsafe fn from_hwnd<'a>(hwnd: winapi::shared::windef::HWND)
-        -> Option<&'a WindowShared<W>>
-    {
+    unsafe fn from_hwnd<'a>(hwnd: winapi::shared::windef::HWND) -> Option<&'a WindowShared<W>> {
         if hwnd.is_null() {
             return None;
         }
         winapi::um::errhandlingapi::SetLastError(0);
-        let value = winapi::um::winuser::GetWindowLongPtrW(hwnd,
-                                                           winapi::um::winuser::GWLP_USERDATA);
+        let value =
+            winapi::um::winuser::GetWindowLongPtrW(hwnd, winapi::um::winuser::GWLP_USERDATA);
         if let Some(err) = Win32Error::try_last() {
             error!("GetWindowLongPtrW: {}", err);
             return None;
@@ -186,9 +205,12 @@ impl<W: 'static + Clone> WindowShared<W> {
                     // Before we change the pixel format, let's query the PFD at the specified index
                     // and make sure it matches what was provided.
                     let mut pfd2: winapi::um::wingdi::PIXELFORMATDESCRIPTOR = std::mem::zeroed();
-                    let result = winapi::um::wingdi::DescribePixelFormat(dc.hdc(), index,
-                                                                         pfd_size as u32,
-                                                                         &mut pfd2);
+                    let result = winapi::um::wingdi::DescribePixelFormat(
+                        dc.hdc(),
+                        index,
+                        pfd_size as u32,
+                        &mut pfd2,
+                    );
                     if result == 0 {
                         return Err(err!(SystemError("DescribePixelFormat"): Win32Error::last()));
                     }
@@ -240,8 +262,12 @@ impl<W: 'static + Clone> Drop for Window<W> {
 impl<W: 'static + Clone> IWindow for Window<W> {
     type Context = Context<W>;
 
-    fn id(&self) -> &W { &self.shared.id }
-    fn is_alive(&self) -> bool { self.shared.hwnd.get().is_some() }
+    fn id(&self) -> &W {
+        &self.shared.id
+    }
+    fn is_alive(&self) -> bool {
+        self.shared.hwnd.get().is_some()
+    }
 
     fn is_visible(&self) -> bool {
         let style = match self.shared.get_window_long(winapi::um::winuser::GWL_STYLE) {
@@ -264,8 +290,8 @@ struct WindowClassManager {
 }
 
 lazy_static! {
-    static ref WINDOW_CLASS_MANAGER: Arc<Mutex<WindowClassManager>>
-        = Arc::new(Mutex::new(WindowClassManager {
+    static ref WINDOW_CLASS_MANAGER: Arc<Mutex<WindowClassManager>> =
+        Arc::new(Mutex::new(WindowClassManager {
             map: HashMap::new(),
             next_num: 0,
         }));
@@ -286,8 +312,10 @@ impl WindowClassManager {
         let hcursor;
 
         unsafe {
-             hcursor = winapi::um::winuser::LoadCursorW(std::ptr::null_mut(),
-                                                        winapi::um::winuser::IDC_ARROW);
+            hcursor = winapi::um::winuser::LoadCursorW(
+                std::ptr::null_mut(),
+                winapi::um::winuser::IDC_ARROW,
+            );
         }
 
         if hcursor.is_null() {
@@ -313,7 +341,9 @@ impl WindowClassManager {
 
         'name_loop: loop {
             name = format!("AxisWindow_{}", self.next_num)
-                   .encode_utf16().chain(std::iter::once(0)).collect();
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
             wc.lpszClassName = name.as_ptr();
 
             unsafe {
@@ -341,8 +371,8 @@ impl WindowClassManager {
 
 /// Window message handler.
 unsafe extern "system" fn wndproc<W: 'static + Clone>(
-    hwnd: winapi::shared::windef::HWND, msg: u32, wparam: usize, lparam: isize) -> isize
-{
+    hwnd: winapi::shared::windef::HWND, msg: u32, wparam: usize, lparam: isize,
+) -> isize {
     match msg {
         winapi::um::winuser::WM_DESTROY => {
             if let Some(shared) = WindowShared::<W>::from_hwnd(hwnd) {

@@ -23,7 +23,9 @@ use crate::vec_image::VecImage;
 pub trait Image: Sized {
     /// The image's pixel type. Has a lifetime parameter because some image types may prefer to
     /// return a reference to a pixel.
-    type Pixel<'a>: Sized where Self: 'a;
+    type Pixel<'a>: Sized
+    where
+        Self: 'a;
 
     /// Returns an image structure that clones each requested pixel.
     fn cloned<'a>(&'a self) -> Cloned<'a, <Self::Pixel<'a> as Deref>::Target, Self>
@@ -39,7 +41,10 @@ pub trait Image: Sized {
     where
         Self::Pixel<'a>: IntoColorLossy<T>,
     {
-        Convert { parent: self, _phantom: PhantomData }
+        Convert {
+            parent: self,
+            _phantom: PhantomData,
+        }
     }
 
     /// Returns an image structure that copies each requested pixel.
@@ -71,11 +76,16 @@ pub trait Image: Sized {
     }
 
     /// Returns the image's height in pixels.
-    fn height(&self) -> usize { self.size().y }
+    fn height(&self) -> usize {
+        self.size().y
+    }
 
     /// Uses a callback to map pixel values.
     fn map<'a, T: 'a, F: Fn(Self::Pixel<'a>) -> T>(&'a self, f: F) -> Map<'a, Self, T, F> {
-        Map { callback: f, parent: self }
+        Map {
+            callback: f,
+            parent: self,
+        }
     }
 
     /// Returns the image's size in pixels.
@@ -88,11 +98,17 @@ pub trait Image: Sized {
 
     /// Gets a view of a region within the image without bounds checking.
     fn subimage_unchecked<'a>(&'a self, region: Rect<usize>) -> Subimage<'a, Self> {
-        Subimage { parent: self, region }
+        Subimage {
+            parent: self,
+            region,
+        }
     }
 
     /// Renders the image's contents to a `Bitmap`.
-    fn to_bitmap<'a>(&'a self) -> Bitmap where Self: Image<Pixel<'a> = bool> {
+    fn to_bitmap<'a>(&'a self) -> Bitmap
+    where
+        Self: Image<Pixel<'a> = bool>,
+    {
         Bitmap::from(self)
     }
 
@@ -113,7 +129,9 @@ pub trait Image: Sized {
     }
 
     /// Returns the image's width in pixels.
-    fn width(&self) -> usize { self.size().x }
+    fn width(&self) -> usize {
+        self.size().x
+    }
 }
 
 /// Trait for changing pixels in an image.
@@ -133,8 +151,9 @@ pub trait ImageMut: Image {
     }
 
     /// Attempts to set the pixel at the specified location.
-    fn try_set_pixel(&mut self, pos: Vector2<usize>, pixel: Self::PixelValue)
-        -> Result<(), OutOfBounds>;
+    fn try_set_pixel(
+        &mut self, pos: Vector2<usize>, pixel: Self::PixelValue,
+    ) -> Result<(), OutOfBounds>;
 }
 
 /// Extension functions for images.
@@ -175,5 +194,7 @@ impl Display for OutOfBounds {
 }
 
 impl Error for OutOfBounds {
-    fn description(&self) -> &str { OutOfBounds::MESSAGE }
+    fn description(&self) -> &str {
+        OutOfBounds::MESSAGE
+    }
 }

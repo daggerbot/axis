@@ -30,10 +30,18 @@ pub trait Component {
 }
 
 impl Component for bool {
-    fn max() -> bool { true }
-    fn min() -> bool { false }
-    fn saturate(self) -> bool { self }
-    fn wrap(self) -> bool { self }
+    fn max() -> bool {
+        true
+    }
+    fn min() -> bool {
+        false
+    }
+    fn saturate(self) -> bool {
+        self
+    }
+    fn wrap(self) -> bool {
+        self
+    }
 }
 
 /// Converts losslessly from another color component type.
@@ -42,15 +50,21 @@ pub trait FromComponent<T>: FromComponentLossy<T> {
 }
 
 impl<T> FromComponent<T> for T {
-    fn from_component(other: T) -> T { other }
+    fn from_component(other: T) -> T {
+        other
+    }
 }
 
 impl<'a, T: Copy> FromComponent<&'a T> for T {
-    fn from_component(other: &'a T) -> T { *other }
+    fn from_component(other: &'a T) -> T {
+        *other
+    }
 }
 
 impl FromComponent<f32> for f64 {
-    fn from_component(other: f32) -> f64 { other as f64 }
+    fn from_component(other: f32) -> f64 {
+        other as f64
+    }
 }
 
 /// Converts losslessly into another color component type.
@@ -59,7 +73,9 @@ pub trait IntoComponent<T>: IntoComponentLossy<T> {
 }
 
 impl<F, T: FromComponent<F>> IntoComponent<T> for F {
-    fn into_component(self) -> T { T::from_component(self) }
+    fn into_component(self) -> T {
+        T::from_component(self)
+    }
 }
 
 /// Converts lossily (or losslessly) from another color component type.
@@ -68,11 +84,15 @@ pub trait FromComponentLossy<T> {
 }
 
 impl<T, F: IntoComponent<T>> FromComponentLossy<F> for T {
-    fn from_component_lossy(other: F) -> T { other.into_component() }
+    fn from_component_lossy(other: F) -> T {
+        other.into_component()
+    }
 }
 
 impl FromComponentLossy<f64> for f32 {
-    fn from_component_lossy(other: f64) -> f32 { other as f32 }
+    fn from_component_lossy(other: f64) -> f32 {
+        other as f32
+    }
 }
 
 /// Converts lossily (or losslessly) into another color component type.
@@ -81,7 +101,9 @@ pub trait IntoComponentLossy<T> {
 }
 
 impl<F, T: FromComponentLossy<F>> IntoComponentLossy<T> for F {
-    fn into_component_lossy(self) -> T { T::from_component_lossy(self) }
+    fn into_component_lossy(self) -> T {
+        T::from_component_lossy(self)
+    }
 }
 
 macro_rules! impl_uint {

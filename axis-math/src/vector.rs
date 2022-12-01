@@ -7,27 +7,12 @@
  */
 
 use std::fmt::{Display, Formatter};
-use std::ops::{
-    Add,
-    AddAssign,
-    Div,
-    DivAssign,
-    Mul,
-    MulAssign,
-    Neg,
-    Sub,
-    SubAssign,
-};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::complex::Complex;
 use crate::convert::{
-    FromComposite,
-    FromCompositeLossy,
-    IntoComposite,
-    IntoCompositeLossy,
-    IntoLossy,
-    TryFromComposite,
-    TryIntoComposite,
+    FromComposite, FromCompositeLossy, IntoComposite, IntoCompositeLossy, IntoLossy,
+    TryFromComposite, TryIntoComposite,
 };
 use crate::num::{Identity, Zero};
 use crate::try_ops::{TryAdd, TryDiv, TryMul, TryNeg, TrySub};
@@ -48,7 +33,9 @@ impl<T: Display> Display for Vector2<T> {
 }
 
 impl<T> From<Complex<T>> for Vector2<T> {
-    fn from(v: Complex<T>) -> Vector2<T> { Vector2::new(v.0, v.1) }
+    fn from(v: Complex<T>) -> Vector2<T> {
+        Vector2::new(v.0, v.1)
+    }
 }
 
 /// 3-dimensional vector type.

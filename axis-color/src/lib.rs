@@ -25,11 +25,7 @@ mod rgb;
 pub use alpha::Alpha;
 pub use color::{Color, FromColor, FromColorLossy, IntoColor, IntoColorLossy};
 pub use component::{
-    Component,
-    FromComponent,
-    FromComponentLossy,
-    IntoComponent,
-    IntoComponentLossy,
+    Component, FromComponent, FromComponentLossy, IntoComponent, IntoComponentLossy,
 };
 pub use lum::{Lum, LumAlpha};
 pub use predefined::*;

@@ -19,19 +19,25 @@ pub struct Generate<T, F: Fn(Vector2<usize>) -> T> {
 impl<T, F: Fn(Vector2<usize>) -> T> Image for Generate<T, F> {
     type Pixel<'a> = T where Self: 'a;
 
-    fn height(&self) -> usize { self.size.y }
+    fn height(&self) -> usize {
+        self.size.y
+    }
 
     unsafe fn get_pixel_unchecked<'a>(&'a self, pos: Vector2<usize>) -> T {
         (self.callback)(pos)
     }
 
-    fn size(&self) -> Vector2<usize> { self.size }
+    fn size(&self) -> Vector2<usize> {
+        self.size
+    }
 
     fn try_get_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<T, OutOfBounds> {
         Ok((self.callback)(self.check_pixel_pos(pos)?))
     }
 
-    fn width(&self) -> usize { self.size.x }
+    fn width(&self) -> usize {
+        self.size.x
+    }
 }
 
 /// Returns an image object which returns the default value for each pixel.
@@ -40,9 +46,9 @@ pub fn blank<T: Default>(size: Vector2<usize>) -> Generate<T, impl Fn(Vector2<us
 }
 
 /// Returns an image object which returns the same color for each pixel.
-pub fn solid<T: Clone>(size: Vector2<usize>, pixel: T)
-    -> Generate<T, impl Fn(Vector2<usize>) -> T>
-{
+pub fn solid<T: Clone>(
+    size: Vector2<usize>, pixel: T,
+) -> Generate<T, impl Fn(Vector2<usize>) -> T> {
     generate(size, move |_| pixel.clone())
 }
 

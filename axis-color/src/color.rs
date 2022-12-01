@@ -13,17 +13,19 @@ pub trait Color {
 }
 
 /// Trait for conversion from another color type.
-pub trait FromColor<T> : FromColorLossy<T> {
+pub trait FromColor<T>: FromColorLossy<T> {
     fn from_color(other: T) -> Self;
 }
 
 /// Trait for conversion into another color type.
-pub trait IntoColor<T> : IntoColorLossy<T> {
+pub trait IntoColor<T>: IntoColorLossy<T> {
     fn into_color(self) -> T;
 }
 
 impl<F, T: FromColor<F>> IntoColor<T> for F {
-    fn into_color(self) -> T { T::from_color(self) }
+    fn into_color(self) -> T {
+        T::from_color(self)
+    }
 }
 
 /// Trait for lossy conversion into another color type.
@@ -37,5 +39,7 @@ pub trait IntoColorLossy<T> {
 }
 
 impl<F, T: FromColorLossy<F>> IntoColorLossy<T> for F {
-    fn into_color_lossy(self) -> T { T::from_color_lossy(self) }
+    fn into_color_lossy(self) -> T {
+        T::from_color_lossy(self)
+    }
 }

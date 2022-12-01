@@ -12,7 +12,9 @@ pub trait FromLossy<F>: Sized {
 }
 
 impl<T> FromLossy<T> for T {
-    fn from_lossy(from: T) -> T { from }
+    fn from_lossy(from: T) -> T {
+        from
+    }
 }
 
 macro_rules! impl_from_lossy {
@@ -46,7 +48,9 @@ pub trait IntoLossy<T>: Sized {
 }
 
 impl<F, T: FromLossy<F>> IntoLossy<T> for F {
-    fn into_lossy(self) -> T { T::from_lossy(self) }
+    fn into_lossy(self) -> T {
+        T::from_lossy(self)
+    }
 }
 
 /// Converts between composite types consisting of multiple scalars.
@@ -64,7 +68,9 @@ pub trait IntoComposite<T>: Sized {
 }
 
 impl<F, T: FromComposite<F>> IntoComposite<T> for F {
-    fn into_composite(self) -> T { T::from_composite(self) }
+    fn into_composite(self) -> T {
+        T::from_composite(self)
+    }
 }
 
 /// Converts between composite types, typically by using the `as` operator for each scalar.
@@ -82,7 +88,9 @@ pub trait IntoCompositeLossy<T>: Sized {
 }
 
 impl<F, T: FromCompositeLossy<F>> IntoCompositeLossy<T> for F {
-    fn into_composite_lossy(self) -> T { T::from_composite_lossy(self) }
+    fn into_composite_lossy(self) -> T {
+        T::from_composite_lossy(self)
+    }
 }
 
 /// Attempts to convert composite numeric types.

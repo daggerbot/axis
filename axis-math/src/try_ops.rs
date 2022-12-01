@@ -6,7 +6,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use crate::error::{DivByZeroError, RangeError, OverflowError, UnderflowError};
+use crate::error::{DivByZeroError, OverflowError, RangeError, UnderflowError};
 use crate::num::IntLimits;
 
 /// Attempts to add two values.

@@ -24,7 +24,9 @@ impl Display for DivByZeroError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for DivByZeroError {
-    fn description(&self) -> &str { DIV_BY_ZERO_MESSAGE }
+    fn description(&self) -> &str {
+        DIV_BY_ZERO_MESSAGE
+    }
 }
 
 /// Indicates that an operation resulted in an overflow.
@@ -39,7 +41,9 @@ impl Display for OverflowError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for OverflowError {
-    fn description(&self) -> &str { OVERFLOW_MESSAGE }
+    fn description(&self) -> &str {
+        OVERFLOW_MESSAGE
+    }
 }
 
 /// Indicates that an operation resulted in an underflow.
@@ -54,7 +58,9 @@ impl Display for UnderflowError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for UnderflowError {
-    fn description(&self) -> &str { UNDERFLOW_MESSAGE }
+    fn description(&self) -> &str {
+        UNDERFLOW_MESSAGE
+    }
 }
 
 /// Indicates that the output value cannot be represented by the output type.
@@ -84,9 +90,13 @@ impl std::error::Error for RangeError {
 }
 
 impl From<OverflowError> for RangeError {
-    fn from(_: OverflowError) -> RangeError { RangeError::Overflow }
+    fn from(_: OverflowError) -> RangeError {
+        RangeError::Overflow
+    }
 }
 
 impl From<UnderflowError> for RangeError {
-    fn from(_: UnderflowError) -> RangeError { RangeError::Underflow }
+    fn from(_: UnderflowError) -> RangeError {
+        RangeError::Underflow
+    }
 }

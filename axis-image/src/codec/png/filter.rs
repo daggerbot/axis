@@ -63,7 +63,9 @@ impl Display for InvalidFilterMethod {
 }
 
 impl Error for InvalidFilterMethod {
-    fn description(&self) -> &str { Self::DESCRIPTION }
+    fn description(&self) -> &str {
+        Self::DESCRIPTION
+    }
 }
 
 /// Filters bytes for better compression.
@@ -78,9 +80,9 @@ impl<W: Write> BaseFilterer<W> {
         self.inner
     }
 
-    pub fn new(inner: W, image_size: Vector2<usize>, bit_depth: u8, color_type: ColorType)
-        -> BaseFilterer<W>
-    {
+    pub fn new(
+        inner: W, image_size: Vector2<usize>, bit_depth: u8, color_type: ColorType,
+    ) -> BaseFilterer<W> {
         let row_len = match bit_depth {
             1 | 2 | 4 => div_ceil(image_size.x, 8 / bit_depth as usize),
             8 => image_size.x * color_type.channel_count(),

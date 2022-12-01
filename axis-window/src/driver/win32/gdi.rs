@@ -37,7 +37,9 @@ impl<W: 'static + Clone> Dc<W> {
         })
     }
 
-    pub fn hdc(&self) -> winapi::shared::windef::HDC { self.hdc }
+    pub fn hdc(&self) -> winapi::shared::windef::HDC {
+        self.hdc
+    }
 }
 
 impl<W: 'static + Clone> Drop for Dc<W> {

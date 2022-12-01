@@ -10,7 +10,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 
-use byteorder::{BE, ByteOrder, WriteBytesExt};
+use byteorder::{ByteOrder, WriteBytesExt, BE};
 use color::{FromComponentLossy, IntoComponentLossy, Lum, LumAlpha, Rgb, Rgba};
 
 /// Enumeration of PNG color types.
@@ -41,23 +41,38 @@ impl ColorType {
         match self {
             ColorType::Gray => match bit_depth {
                 1 | 2 | 4 | 8 | 16 => Ok(bit_depth),
-                _ => Err(InvalidBitDepth { bit_depth, color_type: Some(self) }),
+                _ => Err(InvalidBitDepth {
+                    bit_depth,
+                    color_type: Some(self),
+                }),
             },
             ColorType::Rgb => match bit_depth {
                 8 | 16 => Ok(bit_depth),
-                _ => Err(InvalidBitDepth { bit_depth, color_type: Some(self) }),
+                _ => Err(InvalidBitDepth {
+                    bit_depth,
+                    color_type: Some(self),
+                }),
             },
             ColorType::Index => match bit_depth {
                 1 | 2 | 4 | 8 => Ok(bit_depth),
-                _ => Err(InvalidBitDepth { bit_depth, color_type: Some(self) }),
+                _ => Err(InvalidBitDepth {
+                    bit_depth,
+                    color_type: Some(self),
+                }),
             },
             ColorType::GrayAlpha => match bit_depth {
                 8 | 16 => Ok(bit_depth),
-                _ => Err(InvalidBitDepth { bit_depth, color_type: Some(self) }),
+                _ => Err(InvalidBitDepth {
+                    bit_depth,
+                    color_type: Some(self),
+                }),
             },
             ColorType::RgbAlpha => match bit_depth {
                 8 | 16 => Ok(bit_depth),
-                _ => Err(InvalidBitDepth { bit_depth, color_type: Some(self) }),
+                _ => Err(InvalidBitDepth {
+                    bit_depth,
+                    color_type: Some(self),
+                }),
             },
         }
     }
@@ -111,7 +126,9 @@ impl Display for InvalidColorType {
 }
 
 impl Error for InvalidColorType {
-    fn description(&self) -> &str { Self::DESCRIPTION }
+    fn description(&self) -> &str {
+        Self::DESCRIPTION
+    }
 }
 
 /// Raised when an invalid bit depth is encountered.
@@ -132,14 +149,22 @@ impl Display for InvalidBitDepth {
                 write!(fmt, "{}: {}", Self::DESCRIPTION, self.bit_depth)
             },
             Some(color_type) => {
-                write!(fmt, "{}: {} {}", Self::DESCRIPTION, color_type, self.bit_depth)
+                write!(
+                    fmt,
+                    "{}: {} {}",
+                    Self::DESCRIPTION,
+                    color_type,
+                    self.bit_depth
+                )
             },
         }
     }
 }
 
 impl Error for InvalidBitDepth {
-    fn description(&self) -> &str { Self::DESCRIPTION }
+    fn description(&self) -> &str {
+        Self::DESCRIPTION
+    }
 }
 
 /// Trait for PNG pixel components.
@@ -328,7 +353,8 @@ impl<W: Write> PixelPacker<W> {
             8 => {
                 let mut bytes = [0; 4];
                 pixel.encode_u8(&mut bytes);
-                self.inner.write_all(&bytes[..P::COLOR_TYPE.channel_count()])
+                self.inner
+                    .write_all(&bytes[..P::COLOR_TYPE.channel_count()])
             },
             16 => {
                 let mut words = [0; 4];
@@ -337,7 +363,8 @@ impl<W: Write> PixelPacker<W> {
                 for i in 0..P::COLOR_TYPE.channel_count() {
                     BE::write_u16(&mut bytes[(i * 2)..], words[i]);
                 }
-                self.inner.write_all(&bytes[..(P::COLOR_TYPE.channel_count() * 2)])
+                self.inner
+                    .write_all(&bytes[..(P::COLOR_TYPE.channel_count() * 2)])
             },
             _ => unreachable!(),
         }

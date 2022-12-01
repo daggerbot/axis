@@ -37,7 +37,9 @@ impl<W: 'static + Clone> Context<W> {
 
 impl<W: 'static + Clone> Context<W> {
     /// Returns an [`Rc`] that is unique to this context.
-    pub(crate) fn unique(&self) -> &Rc<()> { &self.unique }
+    pub(crate) fn unique(&self) -> &Rc<()> {
+        &self.unique
+    }
 }
 
 impl<W: 'static + Clone> IContext for Context<W> {

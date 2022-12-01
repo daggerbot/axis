@@ -21,13 +21,19 @@ pub struct VecImage<T> {
 
 impl<T> VecImage<T> {
     /// Returns a reference to the underlying buffer.
-    pub fn buf(&self) -> &[T] { &self.buf }
+    pub fn buf(&self) -> &[T] {
+        &self.buf
+    }
 
     /// Returns a mutable reference to the underlying buffer.
-    pub fn buf_mut(&mut self) -> &mut [T] { &mut self.buf }
+    pub fn buf_mut(&mut self) -> &mut [T] {
+        &mut self.buf
+    }
 
     /// Deconstructs the image and returns its buffer.
-    pub fn into_buf(self) -> Vec<T> { self.buf }
+    pub fn into_buf(self) -> Vec<T> {
+        self.buf
+    }
 
     /// Gets a reference to the specified row.
     pub fn row(&self, y: usize) -> &[T] {
@@ -111,15 +117,21 @@ impl<T> Image for VecImage<T> {
         self.buf.get_unchecked(self.pixel_index_unchecked(pos))
     }
 
-    fn height(&self) -> usize { self.size.y }
+    fn height(&self) -> usize {
+        self.size.y
+    }
 
-    fn size(&self) -> Vector2<usize> { self.size }
+    fn size(&self) -> Vector2<usize> {
+        self.size
+    }
 
     fn try_get_pixel<'a>(&'a self, pos: Vector2<usize>) -> Result<&'a T, OutOfBounds> {
         Ok(&self.buf[self.try_pixel_index(pos)?])
     }
 
-    fn width(&self) -> usize { self.size.x }
+    fn width(&self) -> usize {
+        self.size.x
+    }
 }
 
 impl<T> ImageMut for VecImage<T> {

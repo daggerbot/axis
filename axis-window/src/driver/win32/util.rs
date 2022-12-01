@@ -35,9 +35,14 @@ impl Display for Win32Error {
             let mut buf: *mut u16 = std::ptr::null_mut();
             winapi::um::winbase::FormatMessageW(
                 winapi::um::winbase::FORMAT_MESSAGE_ALLOCATE_BUFFER
-                | winapi::um::winbase::FORMAT_MESSAGE_FROM_SYSTEM,
-                std::ptr::null(), self.0, 0, &mut buf as *mut *mut u16 as *mut u16, 0,
-                std::ptr::null_mut());
+                    | winapi::um::winbase::FORMAT_MESSAGE_FROM_SYSTEM,
+                std::ptr::null(),
+                self.0,
+                0,
+                &mut buf as *mut *mut u16 as *mut u16,
+                0,
+                std::ptr::null_mut(),
+            );
 
             if buf.is_null() {
                 return write!(fmt, "win32 error code {}", self.0);
@@ -70,17 +75,23 @@ impl<T: 'static + Sized> LocalBox<T> {
 
 impl<T: 'static + Sized> LocalBox<[T]> {
     pub unsafe fn from_raw_parts(ptr: *mut T, len: usize) -> LocalBox<[T]> {
-        LocalBox { data: std::slice::from_raw_parts_mut(ptr, len) }
+        LocalBox {
+            data: std::slice::from_raw_parts_mut(ptr, len),
+        }
     }
 }
 
 impl<T: 'static + ?Sized> Deref for LocalBox<T> {
     type Target = T;
-    fn deref(&self) -> &T { self.data }
+    fn deref(&self) -> &T {
+        self.data
+    }
 }
 
 impl<T: 'static + ?Sized> DerefMut for LocalBox<T> {
-    fn deref_mut(&mut self) -> &mut T { self.data }
+    fn deref_mut(&mut self) -> &mut T {
+        self.data
+    }
 }
 
 impl<T: 'static + ?Sized> Drop for LocalBox<T> {
@@ -93,11 +104,15 @@ impl<T: 'static + ?Sized> Drop for LocalBox<T> {
 
 impl<I, T: 'static + ?Sized + Index<I>> Index<I> for LocalBox<T> {
     type Output = T::Output;
-    fn index(&self, index: I) -> &T::Output { self.data.index(index) }
+    fn index(&self, index: I) -> &T::Output {
+        self.data.index(index)
+    }
 }
 
 impl<I, T: 'static + ?Sized + IndexMut<I>> IndexMut<I> for LocalBox<T> {
-    fn index_mut(&mut self, index: I) -> &mut T::Output { self.data.index_mut(index) }
+    fn index_mut(&mut self, index: I) -> &mut T::Output {
+        self.data.index_mut(index)
+    }
 }
 
 /// Returns the current .exe module handle.
@@ -113,7 +128,5 @@ pub fn get_exe_handle() -> crate::error::Result<winapi::shared::minwindef::HINST
 
 /// Returns the last Win32 error code for the current thread.
 fn get_last_error_code() -> u32 {
-    unsafe {
-        winapi::um::errhandlingapi::GetLastError()
-    }
+    unsafe { winapi::um::errhandlingapi::GetLastError() }
 }

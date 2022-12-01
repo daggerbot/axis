@@ -10,7 +10,7 @@ use std::ops::{Add, Div, Mul, Sub};
 
 /// Trait for scalar types that can be treated as continuous (computers cannot represent true
 /// continuous values).
-pub trait Continuous : Scalar {}
+pub trait Continuous: Scalar {}
 impl Continuous for f32 {}
 impl Continuous for f64 {}
 
@@ -26,7 +26,7 @@ pub trait IntLimits {
 }
 
 /// Trait for types that exhibit common properties of scalars.
-pub trait Scalar : Add + Div + Mul + PartialEq + Sized + Sub {}
+pub trait Scalar: Add + Div + Mul + PartialEq + Sized + Sub {}
 impl<T: Add + Div + Mul + PartialEq + Sized + Sub> Scalar for T {}
 
 /// Gets a type's additive identity.

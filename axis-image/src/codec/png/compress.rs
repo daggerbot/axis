@@ -59,7 +59,9 @@ impl Display for InvalidCompressionMethod {
 }
 
 impl Error for InvalidCompressionMethod {
-    fn description(&self) -> &str { Self::DESCRIPTION }
+    fn description(&self) -> &str {
+        Self::DESCRIPTION
+    }
 }
 
 /// Stream wrapper for compressing data.

@@ -6,8 +6,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use std::marker::PhantomData;
 use std::iter::Once;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::device::IDevice;
@@ -39,11 +39,17 @@ impl<W: 'static + Clone> Eq for Device<W> {}
 impl<W: 'static + Clone> IDevice for Device<W> {
     type Context = Context<W>;
 
-    fn default_pixel_format(&self) -> PixelFormat { PixelFormat::Default }
+    fn default_pixel_format(&self) -> PixelFormat {
+        PixelFormat::Default
+    }
 
-    fn new_window(&self) -> WindowBuilder<W> { WindowBuilder::new() }
+    fn new_window(&self) -> WindowBuilder<W> {
+        WindowBuilder::new()
+    }
 
-    fn pixel_formats(&self) -> Once<PixelFormat> { std::iter::once(PixelFormat::Default) }
+    fn pixel_formats(&self) -> Once<PixelFormat> {
+        std::iter::once(PixelFormat::Default)
+    }
 }
 
 impl<W: 'static + Clone> PartialEq for Device<W> {
