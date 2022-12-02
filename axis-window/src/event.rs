@@ -6,6 +6,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+use math::Vector2;
+
+use crate::Coord;
+
 /// Determines when update events are generated.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UpdateKind {
@@ -19,7 +23,7 @@ pub enum UpdateKind {
 
     /// Update events are generated at a time specifed by the driver. This ideally occurs during
     /// the monitor's v-blank, but this behavior may not be supported by all drivers. When
-    /// unavailable, this behaves the same as [`Active`].
+    /// unavailable, this behaves the same as `Active`.
     VBlank,
 }
 
@@ -28,6 +32,8 @@ pub enum UpdateKind {
 pub enum Event<W: 'static + Clone> {
     Close { window_id: W },
     Destroy { window_id: W },
+    Move { window_id: W, pos: Vector2<Coord> },
+    Resize { window_id: W, size: Vector2<Coord> },
     Update { kind: UpdateKind },
     Visibility { window_id: W, visible: bool },
 }
@@ -38,6 +44,8 @@ impl<W: 'static + Clone> Event<W> {
         match *self {
             Event::Close { ref window_id } => Some(window_id),
             Event::Destroy { ref window_id } => Some(window_id),
+            Event::Move { ref window_id, .. } => Some(window_id),
+            Event::Resize { ref window_id, .. } => Some(window_id),
             Event::Visibility { ref window_id, .. } => Some(window_id),
             _ => None,
         }

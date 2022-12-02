@@ -47,6 +47,18 @@ pub trait IWindowBuilder {
     fn build(
         &self, id: <Self::Context as IContext>::WindowId,
     ) -> Result<<Self::Context as IContext>::Window>;
+
+    /// Sets the initial window position.
+    fn with_pos(&mut self, pos: WindowPos) -> &mut Self;
+
+    /// Sets the initial size of the window's client area.
+    fn with_size(&mut self, size: Option<Vector2<Coord>>) -> &mut Self;
+
+    /// Sets the initial window title.
+    fn with_title<S: Into<String>>(&mut self, title: S) -> &mut Self;
+
+    /// Sets the window's initial visibility state.
+    fn with_visibility(&mut self, visible: bool) -> &mut Self;
 }
 
 /// Object interface for window builders.
@@ -54,6 +66,10 @@ pub trait IAnyWindowBuilder {
     type WindowId: 'static + Clone;
 
     fn build(&self, id: Self::WindowId) -> Result<Window<Self::WindowId>>;
+    fn set_pos(&mut self, pos: WindowPos);
+    fn set_size(&mut self, size: Option<Vector2<Coord>>);
+    fn set_title(&mut self, title: String);
+    fn set_visible(&mut self, visible: bool);
 }
 
 impl<T: IWindowBuilder> IAnyWindowBuilder for T {
@@ -61,6 +77,22 @@ impl<T: IWindowBuilder> IAnyWindowBuilder for T {
 
     fn build(&self, id: Self::WindowId) -> Result<Window<Self::WindowId>> {
         Ok(Window(Box::new(IWindowBuilder::build(self, id)?)))
+    }
+
+    fn set_pos(&mut self, pos: WindowPos) {
+        IWindowBuilder::with_pos(self, pos);
+    }
+
+    fn set_size(&mut self, size: Option<Vector2<Coord>>) {
+        IWindowBuilder::with_size(self, size);
+    }
+
+    fn set_title(&mut self, title: String) {
+        IWindowBuilder::with_title(self, title);
+    }
+
+    fn set_visible(&mut self, visible: bool) {
+        IWindowBuilder::with_visibility(self, visible);
     }
 }
 
@@ -75,11 +107,44 @@ impl<W: 'static + Clone> WindowBuilder<W> {
     pub fn build(&self, id: W) -> Result<Window<W>> {
         self.0.build(id)
     }
+
+    /// Sets the initial window position to the center of the default monitor.
+    pub fn centered(&mut self) -> &mut WindowBuilder<W> {
+        self.0.set_pos(WindowPos::Centered);
+        self
+    }
+
+    /// Shows the window as soon as it is created.
+    pub fn visible(&mut self) -> &mut WindowBuilder<W> {
+        self.0.set_visible(true);
+        self
+    }
+
+    /// Sets the initial window position.
+    pub fn with_pos(&mut self, pos: Vector2<Coord>) -> &mut WindowBuilder<W> {
+        self.0.set_pos(WindowPos::Point(pos));
+        self
+    }
+
+    /// Sets the initial window size.
+    pub fn with_size(&mut self, size: Vector2<Coord>) -> &mut WindowBuilder<W> {
+        self.0.set_size(Some(size));
+        self
+    }
+
+    /// Sets the initial window title.
+    pub fn with_title<S: Into<String>>(&mut self, title: S) -> &mut WindowBuilder<W> {
+        self.0.set_title(title.into());
+        self
+    }
 }
 
 /// Interface for top-level windows.
 pub trait IWindow {
     type Context: IContext<Window = Self>;
+
+    /// Destroys the window.
+    fn destroy(&mut self);
 
     /// Returns the window ID.
     fn id(&self) -> &<Self::Context as IContext>::WindowId;
@@ -90,22 +155,51 @@ pub trait IWindow {
     /// Returns true if the window is visible.
     fn is_visible(&self) -> bool;
 
+    /// Returns the window's current position.
+    fn pos(&self) -> Result<Vector2<Coord>>;
+
+    /// Moves the window.
+    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()>;
+
+    /// Resizes the window.
+    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()>;
+
+    /// Changes the window title.
+    fn set_title(&mut self, title: &str) -> Result<()>;
+
     /// Shows or hides the window.
     fn set_visible(&mut self, visible: bool) -> Result<()>;
+
+    /// Returns the size of the window's client area in pixels.
+    fn size(&self) -> Result<Vector2<Coord>>;
+
+    /// Returns the window title.
+    fn title(&self) -> Result<String>;
 }
 
 /// Object interface for top-level windows.
 pub trait IAnyWindow {
     type WindowId: 'static + Clone;
 
+    fn destroy(&mut self);
     fn id(&self) -> &Self::WindowId;
     fn is_alive(&self) -> bool;
     fn is_visible(&self) -> bool;
+    fn pos(&self) -> Result<Vector2<Coord>>;
+    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()>;
+    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()>;
+    fn set_title(&mut self, title: &str) -> Result<()>;
     fn set_visible(&mut self, visible: bool) -> Result<()>;
+    fn size(&self) -> Result<Vector2<Coord>>;
+    fn title(&self) -> Result<String>;
 }
 
 impl<T: IWindow> IAnyWindow for T {
     type WindowId = <T::Context as IContext>::WindowId;
+
+    fn destroy(&mut self) {
+        IWindow::destroy(self);
+    }
 
     fn id(&self) -> &Self::WindowId {
         IWindow::id(self)
@@ -119,8 +213,32 @@ impl<T: IWindow> IAnyWindow for T {
         IWindow::is_visible(self)
     }
 
+    fn pos(&self) -> Result<Vector2<Coord>> {
+        IWindow::pos(self)
+    }
+
+    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
+        IWindow::set_pos(self, pos)
+    }
+
+    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
+        IWindow::set_size(self, size)
+    }
+
+    fn set_title(&mut self, title: &str) -> Result<()> {
+        IWindow::set_title(self, title)
+    }
+
     fn set_visible(&mut self, visible: bool) -> Result<()> {
         IWindow::set_visible(self, visible)
+    }
+
+    fn size(&self) -> Result<Vector2<Coord>> {
+        IWindow::size(self)
+    }
+
+    fn title(&self) -> Result<String> {
+        IWindow::title(self)
     }
 }
 
@@ -128,6 +246,11 @@ impl<T: IWindow> IAnyWindow for T {
 pub struct Window<W: 'static + Clone>(pub(crate) Box<dyn 'static + IAnyWindow<WindowId = W>>);
 
 impl<W: 'static + Clone> Window<W> {
+    /// Destroys the window.
+    pub fn destroy(&mut self) {
+        self.0.destroy();
+    }
+
     /// Returns the window ID.
     pub fn id(&self) -> &W {
         self.0.id()
@@ -143,8 +266,38 @@ impl<W: 'static + Clone> Window<W> {
         self.0.is_visible()
     }
 
+    /// Returns the window's current position.
+    pub fn pos(&self) -> Result<Vector2<Coord>> {
+        self.0.pos()
+    }
+
+    /// Moves the window.
+    pub fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
+        self.0.set_pos(pos)
+    }
+
+    /// Resizes the window.
+    pub fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
+        self.0.set_size(size)
+    }
+
+    /// Changes the window title.
+    pub fn set_title(&mut self, title: &str) -> Result<()> {
+        self.0.set_title(title)
+    }
+
     /// Shows or hides the window.
     pub fn set_visible(&mut self, visible: bool) -> Result<()> {
         self.0.set_visible(visible)
+    }
+
+    /// Returns the size of the window's client area in pixels.
+    pub fn size(&self) -> Result<Vector2<Coord>> {
+        self.0.size()
+    }
+
+    /// Returns the window's title.
+    pub fn title(&self) -> Result<String> {
+        self.0.title()
     }
 }

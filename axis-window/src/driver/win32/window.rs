@@ -19,7 +19,7 @@ use crate::driver::win32::context::{Context, EventManager};
 use crate::driver::win32::device::Device;
 use crate::driver::win32::gdi::Dc;
 use crate::driver::win32::pixel_format::PixelFormat;
-use crate::driver::win32::util::{get_exe_handle, Win32Error};
+use crate::driver::win32::util::{clear_last_error, get_exe_handle, Win32Error};
 use crate::error::{ErrorKind, Result};
 use crate::event::Event;
 use crate::window::{IWindow, IWindowBuilder, WindowKind, WindowPos};
@@ -34,6 +34,7 @@ pub struct WindowBuilder<W: 'static + Clone> {
     pos: WindowPos,
     size: Option<Vector2<Coord>>,
     title: String,
+    visible: bool,
 }
 
 impl<W: 'static + Clone> WindowBuilder<W> {
@@ -46,6 +47,7 @@ impl<W: 'static + Clone> WindowBuilder<W> {
             pos: WindowPos::Default,
             size: None,
             title: String::new(),
+            visible: false,
         }
     }
 }
@@ -60,9 +62,14 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
             .encode_utf16()
             .chain(std::iter::once(0))
             .collect();
-        let (style, ex_style) = match self.kind {
+
+        let (mut style, ex_style) = match self.kind {
             WindowKind::Normal => (winapi::um::winuser::WS_OVERLAPPEDWINDOW, 0),
         };
+        if self.visible {
+            style |= winapi::um::winuser::WS_VISIBLE;
+        }
+
         let pos = match self.pos {
             WindowPos::Default => Vector2::new(
                 winapi::um::winuser::CW_USEDEFAULT,
@@ -77,7 +84,6 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
             },
             WindowPos::Point(pos) => pos,
         };
-        let hinstance = get_exe_handle()?;
 
         // If size is specified, interpret it is client size, not full window size.
         let size = match self.size {
@@ -89,8 +95,8 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
                 let mut rect = winapi::shared::windef::RECT {
                     left: 0,
                     top: 0,
-                    right: size.x,
-                    bottom: size.y,
+                    right: std::cmp::max(size.x, 1),
+                    bottom: std::cmp::max(size.y, 1),
                 };
 
                 unsafe {
@@ -103,6 +109,7 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
             },
         };
 
+        let hinstance = get_exe_handle()?;
         let hwnd;
 
         unsafe {
@@ -142,6 +149,26 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
             Rc::into_raw(window.shared.clone()) as isize,
         )?;
         Ok(window)
+    }
+
+    fn with_pos(&mut self, pos: WindowPos) -> &mut WindowBuilder<W> {
+        self.pos = pos;
+        self
+    }
+
+    fn with_size(&mut self, size: Option<Vector2<Coord>>) -> &mut WindowBuilder<W> {
+        self.size = size;
+        self
+    }
+
+    fn with_title<S: Into<String>>(&mut self, title: S) -> &mut WindowBuilder<W> {
+        self.title = title.into();
+        self
+    }
+
+    fn with_visibility(&mut self, visible: bool) -> &mut WindowBuilder<W> {
+        self.visible = visible;
+        self
     }
 }
 
@@ -268,6 +295,10 @@ impl<W: 'static + Clone> Drop for Window<W> {
 impl<W: 'static + Clone> IWindow for Window<W> {
     type Context = Context<W>;
 
+    fn destroy(&mut self) {
+        self.shared.destroy();
+    }
+
     fn id(&self) -> &W {
         &self.shared.id
     }
@@ -288,6 +319,78 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         style & winapi::um::winuser::WS_VISIBLE != 0
     }
 
+    fn pos(&self) -> Result<Vector2<Coord>> {
+        let hwnd = self.shared.try_hwnd()?;
+        let mut rect;
+
+        unsafe {
+            rect = std::mem::zeroed();
+            if winapi::um::winuser::GetWindowRect(hwnd, &mut rect) == 0 {
+                return Err(err!(SystemError("GetWindowRect"): Win32Error::last()));
+            }
+        }
+
+        Ok(Vector2 {
+            x: Coord::from(rect.left),
+            y: Coord::from(rect.top),
+        })
+    }
+
+    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
+        let hwnd = self.shared.try_hwnd()?;
+
+        unsafe {
+            if winapi::um::winuser::SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                pos.x,
+                pos.y,
+                0,
+                0,
+                winapi::um::winuser::SWP_NOSIZE | winapi::um::winuser::SWP_NOZORDER,
+            ) == 0
+            {
+                return Err(err!(SystemError("SetWindowPos"): Win32Error::last()));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
+        let hwnd = self.shared.try_hwnd()?;
+
+        unsafe {
+            if winapi::um::winuser::SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                0,
+                0,
+                std::cmp::max(size.x, 1),
+                std::cmp::max(size.y, 1),
+                winapi::um::winuser::SWP_NOMOVE | winapi::um::winuser::SWP_NOZORDER,
+            ) == 0
+            {
+                return Err(err!(SystemError("SetWindowPos"): Win32Error::last()));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn set_title(&mut self, title: &str) -> Result<()> {
+        let hwnd = self.shared.try_hwnd()?;
+        let wtitle: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+
+        unsafe {
+            if winapi::um::winuser::SetWindowTextW(hwnd, wtitle.as_ptr()) == 0 {
+                return Err(err!(SystemError("SetWindowTextW"): Win32Error::last()));
+            }
+        }
+
+        Ok(())
+    }
+
     fn set_visible(&mut self, visible: bool) -> Result<()> {
         let hwnd = self.shared.try_hwnd()?;
         let command = match visible {
@@ -300,6 +403,53 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         }
 
         Ok(())
+    }
+
+    fn size(&self) -> Result<Vector2<Coord>> {
+        let hwnd = self.shared.try_hwnd()?;
+        let mut rect;
+
+        unsafe {
+            rect = std::mem::zeroed();
+            if winapi::um::winuser::GetClientRect(hwnd, &mut rect) == 0 {
+                return Err(err!(SystemError("GetClientRect"): Win32Error::last()));
+            }
+        }
+
+        Ok(Vector2 {
+            x: Coord::from(rect.right - rect.left),
+            y: Coord::from(rect.bottom - rect.top),
+        })
+    }
+
+    fn title(&self) -> Result<String> {
+        let hwnd = self.shared.try_hwnd()?;
+        let mut buf: Vec<u16> = Vec::new();
+        clear_last_error();
+
+        unsafe {
+            let mut ilen = winapi::um::winuser::GetWindowTextLengthW(hwnd);
+            if ilen <= 0 {
+                match Win32Error::try_last() {
+                    None => return Ok(String::new()),
+                    Some(err) => return Err(err!(SystemError("GetWindowTextLengthW"): err)),
+                }
+            }
+            let mut len = usize::try_from(ilen)?;
+            buf.resize(len + 1, 0);
+
+            ilen = winapi::um::winuser::GetWindowTextW(hwnd, buf.as_mut_ptr(), ilen + 1);
+            if ilen <= 0 {
+                match Win32Error::try_last() {
+                    None => return Ok(String::new()),
+                    Some(err) => return Err(err!(SystemError("GetWindowTextW"): err)),
+                }
+            }
+            len = usize::try_from(ilen)?;
+            buf.truncate(len);
+        }
+
+        Ok(String::from_utf16(buf.as_slice())?)
     }
 }
 
@@ -417,11 +567,41 @@ unsafe extern "system" fn wndproc<W: 'static + Clone>(
             0
         },
 
+        winapi::um::winuser::WM_MOVE => {
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                let x = winapi::shared::minwindef::LOWORD(lparam as u32) as i16;
+                let y = winapi::shared::minwindef::HIWORD(lparam as u32) as i16;
+                window.event_manager.push(Event::Move {
+                    window_id: window.id.clone(),
+                    pos: Vector2 {
+                        x: Coord::from(x),
+                        y: Coord::from(y),
+                    },
+                });
+            }
+            0
+        },
+
         winapi::um::winuser::WM_SHOWWINDOW => {
             if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
                 window.event_manager.push(Event::Visibility {
                     visible: wparam != 0,
                     window_id: window.id.clone(),
+                });
+            }
+            0
+        },
+
+        winapi::um::winuser::WM_SIZE => {
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                let width = winapi::shared::minwindef::LOWORD(lparam as u32);
+                let height = winapi::shared::minwindef::HIWORD(lparam as u32);
+                window.event_manager.push(Event::Resize {
+                    window_id: window.id.clone(),
+                    size: Vector2 {
+                        x: Coord::from(width),
+                        y: Coord::from(height),
+                    },
                 });
             }
             0

@@ -16,17 +16,18 @@ fn main() {
     let device = context.default_device();
     let mut window = device
         .new_window()
+        .visible()
+        .with_title("Event Debugger")
         .build(())
         .expect("can't create main window");
-
-    window.set_visible(true).expect("can't show window");
 
     let main_loop = window::MainLoop::new(window::UpdateKind::Passive);
     context
         .run(&main_loop, |event| {
             println!("{:?}", event);
             match event {
-                window::Event::Close { .. } => main_loop.quit(),
+                window::Event::Close { .. } => window.destroy(),
+                window::Event::Destroy { .. } => main_loop.quit(),
                 _ => (),
             }
         })

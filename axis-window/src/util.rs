@@ -25,50 +25,66 @@ impl<F: FnMut()> Drop for Finally<F> {
     }
 }
 
-/// Box type which frees its data with [`libc::free`]. This can be removed when
-/// [`std::alloc::Allocator`] becomes stable.
 #[cfg(feature = "libc")]
-pub struct CBox<T: 'static + ?Sized> {
-    data: &'static mut T,
-}
+mod libc {
+    use std::fmt::{Debug, Formatter};
 
-#[cfg(feature = "libc")]
-impl<T: 'static + Sized> CBox<T> {
-    pub unsafe fn from_raw(ptr: *mut T) -> CBox<T> {
-        CBox { data: &mut *ptr }
+    /// Box type which frees its data with [`libc::free`]. This can be removed when
+    /// [`std::alloc::Allocator`] becomes stable.
+    pub struct CBox<T: 'static + ?Sized> {
+        data: &'static mut T,
     }
-}
 
-#[cfg(feature = "libc")]
-impl<T: 'static + ?Sized> AsRef<T> for CBox<T> {
-    fn as_ref(&self) -> &T {
-        self.data
+    impl<T: 'static + Sized> CBox<T> {
+        pub fn as_mut_ptr(&mut self) -> *mut T {
+            self.data as *mut T
+        }
+
+        pub fn as_ptr(&self) -> *const T {
+            self.data as *const T
+        }
+
+        pub unsafe fn from_raw(ptr: *mut T) -> CBox<T> {
+            CBox { data: &mut *ptr }
+        }
     }
-}
 
-#[cfg(feature = "libc")]
-impl<T: 'static + ?Sized> std::ops::Deref for CBox<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        self.data
+    impl<T: 'static + ?Sized> AsRef<T> for CBox<T> {
+        fn as_ref(&self) -> &T {
+            self.data
+        }
     }
-}
 
-#[cfg(feature = "libc")]
-impl<T: 'static + ?Sized> std::ops::DerefMut for CBox<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        self.data
+    impl<T: 'static + ?Sized + Debug> Debug for CBox<T> {
+        fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
+            Debug::fmt(self.data, fmt)
+        }
     }
-}
 
-#[cfg(feature = "libc")]
-impl<T: 'static + ?Sized> Drop for CBox<T> {
-    fn drop(&mut self) {
-        unsafe {
-            libc::free(self.data as *mut T as *mut _);
+    impl<T: 'static + ?Sized> std::ops::Deref for CBox<T> {
+        type Target = T;
+        fn deref(&self) -> &T {
+            self.data
+        }
+    }
+
+    impl<T: 'static + ?Sized> std::ops::DerefMut for CBox<T> {
+        fn deref_mut(&mut self) -> &mut T {
+            self.data
+        }
+    }
+
+    impl<T: 'static + ?Sized> Drop for CBox<T> {
+        fn drop(&mut self) {
+            unsafe {
+                libc::free(self.data as *mut T as *mut _);
+            }
         }
     }
 }
+
+#[cfg(feature = "libc")]
+pub use self::libc::*;
 
 /// Clamps a value within a range. The result is undefined if `min` > `max`.
 pub fn clamp<T: Ord>(x: T, min: T, max: T) -> T {

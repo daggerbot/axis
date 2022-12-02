@@ -114,6 +114,12 @@ impl Display for Error {
     }
 }
 
+impl From<std::convert::Infallible> for Error {
+    fn from(_: std::convert::Infallible) -> Error {
+        unreachable!()
+    }
+}
+
 impl From<std::ffi::NulError> for Error {
     fn from(source: std::ffi::NulError) -> Error {
         err!(EncodingError: source)
@@ -123,6 +129,18 @@ impl From<std::ffi::NulError> for Error {
 impl From<std::num::TryFromIntError> for Error {
     fn from(source: std::num::TryFromIntError) -> Error {
         err!(ArithmeticError: source)
+    }
+}
+
+impl From<std::string::FromUtf8Error> for Error {
+    fn from(source: std::string::FromUtf8Error) -> Error {
+        err!(EncodingError: source)
+    }
+}
+
+impl From<std::string::FromUtf16Error> for Error {
+    fn from(source: std::string::FromUtf16Error) -> Error {
+        err!(EncodingError: source)
     }
 }
 

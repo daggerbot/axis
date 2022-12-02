@@ -10,22 +10,27 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use math::Vector2;
+use math::{TryFromComposite, Vector2};
 
-use crate::driver::x11::context::{Connection, Context};
+use crate::device::IDevice;
+use crate::driver::x11::context::{Atoms, Connection, Context};
 use crate::driver::x11::device::Device;
 use crate::driver::x11::pixel_format::PixelFormat;
 use crate::error::Result;
-use crate::util::clamp;
+use crate::util::{clamp, CBox};
 use crate::window::{IWindow, IWindowBuilder, WindowPos};
-use crate::IDevice;
+use crate::Coord;
+
+const EXPIRED_MSG: &'static str = "window destroyed";
 
 /// Parameters for creating an X11 window.
 pub struct WindowBuilder<W: 'static + Clone> {
     device: Device<W>,
     pixel_format: Option<PixelFormat>,
     pos: WindowPos,
-    size: Option<Vector2<usize>>,
+    size: Option<Vector2<Coord>>,
+    title: Option<String>,
+    visible: bool,
 }
 
 impl<W: 'static + Clone> WindowBuilder<W> {
@@ -47,6 +52,8 @@ impl<W: 'static + Clone> WindowBuilder<W> {
             pixel_format: None,
             pos: WindowPos::Default,
             size: None,
+            title: None,
+            visible: false,
         }
     }
 }
@@ -78,6 +85,11 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
                 y: clamp(size.y, 1, 0xffff) as u16,
             },
         };
+
+        let mut attrs = Vec::new();
+        let attr_mask = xcb_sys::XCB_CW_EVENT_MASK;
+        attrs.push(xcb_sys::XCB_EVENT_MASK_STRUCTURE_NOTIFY);
+
         let xid;
 
         unsafe {
@@ -94,35 +106,71 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
                 0,
                 xcb_sys::XCB_WINDOW_CLASS_INPUT_OUTPUT as u16,
                 pixel_format.visual_id(),
-                0,
-                std::ptr::null(),
+                attr_mask,
+                attrs.as_ptr() as *const _,
             );
         }
 
         let shared = Rc::new(WindowShared {
             id,
+            parent_xid: Cell::new(Some(self.device.root_window_id())),
+            pos: Cell::new(Some(pos)),
+            root_xid: self.device.root_window_id(),
+            size: Cell::new(Some(size)),
             visible: Cell::new(false),
             xid: Cell::new(Some(xid)),
         });
 
         manager.borrow_mut().map.insert(xid, shared.clone());
 
-        let window = Window {
+        let mut window = Window {
+            atoms: self.device.atoms().clone(),
             connection,
             shared,
             xcb,
         };
+
+        if let Some(ref title) = self.title {
+            window.set_title(title.as_str())?;
+        }
+        if self.visible {
+            window.set_visible(true)?;
+        }
 
         // Subscribe to close events.
         window.set_atom_property(atoms.wm_protocols, &[atoms.wm_delete_window])?;
 
         Ok(window)
     }
+
+    fn with_pos(&mut self, pos: WindowPos) -> &mut WindowBuilder<W> {
+        self.pos = pos;
+        self
+    }
+
+    fn with_size(&mut self, size: Option<Vector2<Coord>>) -> &mut WindowBuilder<W> {
+        self.size = size;
+        self
+    }
+
+    fn with_title<S: Into<String>>(&mut self, title: S) -> &mut WindowBuilder<W> {
+        self.title = Some(title.into());
+        self
+    }
+
+    fn with_visibility(&mut self, visible: bool) -> &mut WindowBuilder<W> {
+        self.visible = visible;
+        self
+    }
 }
 
 /// Data shared between a [`Window`] and a [`WindowManager`].
 pub struct WindowShared<W: 'static + Clone> {
     id: W,
+    parent_xid: Cell<Option<u32>>,
+    pos: Cell<Option<Vector2<i16>>>,
+    root_xid: u32,
+    size: Cell<Option<Vector2<u16>>>,
     visible: Cell<bool>,
     xid: Cell<Option<u32>>,
 }
@@ -132,15 +180,31 @@ impl<W: 'static + Clone> WindowShared<W> {
         &self.id
     }
 
+    pub fn is_parent_root(&self) -> bool {
+        self.parent_xid.get() == Some(self.root_xid)
+    }
+
     pub fn try_xid(&self) -> Result<u32> {
         match self.xid.get() {
-            None => Err(err!(ResourceExpired("window destroyed"))),
+            None => Err(err!(ResourceExpired(EXPIRED_MSG))),
             Some(xid) => Ok(xid),
         }
     }
 
-    pub fn update_visibility(&self, visible: bool) {
-        self.visible.set(visible);
+    pub fn update_parent_xid(&self, parent_xid: u32) {
+        self.parent_xid.set(Some(parent_xid));
+    }
+
+    pub fn update_pos(&self, pos: Vector2<i16>) -> bool {
+        self.pos.replace(Some(pos)) != Some(pos)
+    }
+
+    pub fn update_size(&self, size: Vector2<u16>) -> bool {
+        self.size.replace(Some(size)) != Some(size)
+    }
+
+    pub fn update_visibility(&self, visible: bool) -> bool {
+        self.visible.replace(visible) != visible
     }
 }
 
@@ -155,6 +219,9 @@ impl<W: 'static + Clone> WindowManager<W> {
         match self.map.remove(&xid) {
             None => None,
             Some(window) => {
+                window.parent_xid.set(None);
+                window.pos.set(None);
+                window.size.set(None);
                 window.xid.set(None);
                 Some(window)
             },
@@ -176,6 +243,7 @@ impl<W: 'static + Clone> WindowManager<W> {
 
 /// Top-level X11 window type.
 pub struct Window<W: 'static + Clone> {
+    atoms: Rc<Atoms>,
     connection: Rc<Connection>,
     shared: Rc<WindowShared<W>>,
     xcb: *mut xcb_sys::xcb_connection_t,
@@ -194,20 +262,81 @@ impl<W: 'static + Clone> Window<W> {
 }
 
 impl<W: 'static + Clone> Window<W> {
-    pub(crate) fn destroy(&self) -> bool {
-        match self.shared.xid.take() {
-            None => false,
-            Some(xid) => {
-                unsafe {
-                    xcb_sys::xcb_destroy_window(self.xcb, xid);
+    pub(crate) fn get_u8_array_property(&self, property: u32, ty: u32) -> Result<Option<Vec<u8>>> {
+        const LONG_LENGTH: u16 = 64;
+        let xid = self.try_xid()?;
+        let mut long_offset = 0;
+        let mut value = Vec::new();
+
+        'request_loop: loop {
+            unsafe {
+                let cookie = xcb_sys::xcb_get_property(
+                    self.xcb,
+                    0,
+                    xid,
+                    property,
+                    ty,
+                    long_offset,
+                    u32::from(LONG_LENGTH),
+                );
+                let mut err_ptr = std::ptr::null_mut();
+                let reply_ptr = xcb_sys::xcb_get_property_reply(self.xcb, cookie, &mut err_ptr);
+                if reply_ptr.is_null() {
+                    if err_ptr.is_null() {
+                        return Err(err!(RequestFailed("X_GetProperty")));
+                    } else {
+                        let err = CBox::from_raw(err_ptr);
+                        return Err(err!(RequestFailed{"X_GetProperty: {:?}", err}));
+                    }
                 }
-                true
-            },
+                let reply = CBox::from_raw(reply_ptr);
+                let value_len =
+                    usize::try_from(xcb_sys::xcb_get_property_value_length(reply.as_ptr()))?;
+
+                if reply.format == 0 && value.is_empty() {
+                    return Ok(None);
+                } else if reply.format != 8 {
+                    println!("{:?}", reply);
+                    return Err(err!(EncodingError("x property format mismatch")));
+                }
+
+                value.extend(std::slice::from_raw_parts(
+                    xcb_sys::xcb_get_property_value(reply.as_ptr()) as *const u8,
+                    value_len,
+                ));
+
+                if value_len < usize::from(LONG_LENGTH) * 4 {
+                    break 'request_loop;
+                } else {
+                    long_offset += u32::from(LONG_LENGTH);
+                }
+            }
         }
+
+        Ok(Some(value))
     }
 
     pub(crate) fn set_atom_property(&self, property: u32, value: &[u32]) -> Result<()> {
         self.set_u32_property(property, xcb_sys::XCB_ATOM_ATOM, value)
+    }
+
+    pub(crate) fn set_u8_property(&self, property: u32, ty: u32, value: &[u8]) -> Result<()> {
+        let xid = self.try_xid()?;
+
+        unsafe {
+            xcb_sys::xcb_change_property(
+                self.xcb,
+                xcb_sys::XCB_PROP_MODE_REPLACE as u8,
+                xid,
+                property,
+                ty,
+                8,
+                u32::try_from(value.len()).unwrap(),
+                value.as_ptr() as *const _,
+            );
+        }
+
+        Ok(())
     }
 
     pub(crate) fn set_u32_property(&self, property: u32, ty: u32, value: &[u32]) -> Result<()> {
@@ -239,6 +368,14 @@ impl<W: 'static + Clone> Drop for Window<W> {
 impl<W: 'static + Clone> IWindow for Window<W> {
     type Context = Context<W>;
 
+    fn destroy(&mut self) {
+        if let Some(xid) = self.shared.xid.take() {
+            unsafe {
+                xcb_sys::xcb_destroy_window(self.xcb, xid);
+            }
+        }
+    }
+
     fn id(&self) -> &W {
         &self.shared.id
     }
@@ -249,6 +386,60 @@ impl<W: 'static + Clone> IWindow for Window<W> {
 
     fn is_visible(&self) -> bool {
         self.shared.visible.get()
+    }
+
+    fn pos(&self) -> Result<Vector2<Coord>> {
+        match self.shared.pos.get() {
+            None => Err(err!(ResourceExpired(EXPIRED_MSG))),
+            Some(pos) => Ok(Vector2::try_from_composite(pos)?),
+        }
+    }
+
+    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
+        let xid = self.try_xid()?;
+        let x = clamp(pos.x, Coord::from(i16::MIN), Coord::from(i16::MAX)) as i16;
+        let y = clamp(pos.y, Coord::from(i16::MIN), Coord::from(i16::MAX)) as i16;
+
+        unsafe {
+            xcb_sys::xcb_configure_window(
+                self.xcb,
+                xid,
+                (xcb_sys::XCB_CONFIG_WINDOW_X | xcb_sys::XCB_CONFIG_WINDOW_Y) as u16,
+                [x as u32, y as u32].as_ptr() as *const _,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
+        let xid = self.try_xid()?;
+        let width = clamp(size.x, 1, Coord::from(u16::MAX)) as u16;
+        let height = clamp(size.y, 1, Coord::from(u16::MAX)) as u16;
+
+        unsafe {
+            xcb_sys::xcb_configure_window(
+                self.xcb,
+                xid,
+                (xcb_sys::XCB_CONFIG_WINDOW_WIDTH | xcb_sys::XCB_CONFIG_WINDOW_HEIGHT) as u16,
+                [width as u32, height as u32].as_ptr() as *const _,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn set_title(&mut self, title: &str) -> Result<()> {
+        let bytes = title.as_bytes();
+        self.set_u8_property(xcb_sys::XCB_ATOM_WM_NAME, xcb_sys::XCB_ATOM_STRING, bytes)?;
+        self.set_u8_property(
+            xcb_sys::XCB_ATOM_WM_ICON_NAME,
+            xcb_sys::XCB_ATOM_STRING,
+            bytes,
+        )?;
+        self.set_u8_property(self.atoms.net_wm_name, self.atoms.utf8_string, bytes)?;
+        self.set_u8_property(self.atoms.net_wm_icon_name, self.atoms.utf8_string, bytes)?;
+        Ok(())
     }
 
     fn set_visible(&mut self, visible: bool) -> Result<()> {
@@ -263,5 +454,23 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         }
 
         Ok(())
+    }
+
+    fn size(&self) -> Result<Vector2<Coord>> {
+        match self.shared.size.get() {
+            None => Err(err!(ResourceExpired(EXPIRED_MSG))),
+            Some(size) => Ok(Vector2::try_from_composite(size)?),
+        }
+    }
+
+    fn title(&self) -> Result<String> {
+        match self.get_u8_array_property(self.atoms.net_wm_name, self.atoms.utf8_string)? {
+            None => (),
+            Some(bytes) => return Ok(String::from_utf8(bytes)?),
+        }
+        match self.get_u8_array_property(xcb_sys::XCB_ATOM_WM_NAME, xcb_sys::XCB_ATOM_STRING)? {
+            None => Ok(String::new()),
+            Some(bytes) => Ok(String::from_utf8(bytes)?),
+        }
     }
 }

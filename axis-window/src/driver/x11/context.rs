@@ -12,6 +12,8 @@ use std::marker::PhantomData;
 use std::os::unix::io::{AsFd, BorrowedFd};
 use std::rc::Rc;
 
+use math::{FromComposite, Vector2};
+
 use crate::context::{IContext, MainLoop};
 use crate::driver::x11::device::{Device, Devices};
 use crate::driver::x11::pixel_format::{PixelFormat, PixelFormats};
@@ -161,16 +163,25 @@ impl PartialEq for Connection {
 /// Commonly used X atoms.
 #[derive(Clone, Copy)]
 pub struct Atoms {
+    pub net_wm_icon_name: u32,
+    pub net_wm_name: u32,
+    pub utf8_string: u32,
     pub wm_delete_window: u32,
     pub wm_protocols: u32,
 }
 
 impl Atoms {
     fn intern(connection: &Connection) -> Result<Atoms> {
+        let net_wm_icon_name = connection.intern_atom("_NET_WM_ICON_NAME");
+        let net_wm_name = connection.intern_atom("_NET_WM_NAME");
+        let utf8_string = connection.intern_atom("UTF8_STRING");
         let wm_delete_window = connection.intern_atom("WM_DELETE_WINDOW");
         let wm_protocols = connection.intern_atom("WM_PROTOCOLS");
 
         Ok(Atoms {
+            net_wm_icon_name: connection.intern_atom_reply(net_wm_icon_name)?,
+            net_wm_name: connection.intern_atom_reply(net_wm_name)?,
+            utf8_string: connection.intern_atom_reply(utf8_string)?,
             wm_delete_window: connection.intern_atom_reply(wm_delete_window)?,
             wm_protocols: connection.intern_atom_reply(wm_protocols)?,
         })
@@ -255,6 +266,34 @@ impl<W: 'static + Clone> Context<W> {
                 )?;
             },
 
+            xcb_sys::XCB_CONFIGURE_NOTIFY => {
+                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_configure_notify_event_t) };
+                if let Some(window) = self.window_manager.borrow().get(ev.window) {
+                    let size = Vector2::new(ev.width, ev.height);
+                    if window.update_size(size) {
+                        f(Event::Resize {
+                            window_id: window.id().clone(),
+                            size: Vector2::from_composite(size),
+                        });
+                    }
+
+                    // We'll get repeated configure notify events if a window manager is active.
+                    // The X server and the window manager will give us different values for the
+                    // window's current position. Let's filter the event and pick the one that we
+                    // actually want.
+                    let is_server_event = xevent.response_type & 0x80 == 0;
+                    if is_server_event == window.is_parent_root() {
+                        let pos = Vector2::new(ev.x, ev.y);
+                        if window.update_pos(pos) {
+                            f(Event::Move {
+                                window_id: window.id().clone(),
+                                pos: Vector2::from_composite(pos),
+                            });
+                        }
+                    }
+                }
+            },
+
             xcb_sys::XCB_DESTROY_NOTIFY => {
                 let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_destroy_notify_event_t) };
                 if let Some(window) = self.window_manager.borrow_mut().expire(ev.window) {
@@ -267,22 +306,31 @@ impl<W: 'static + Clone> Context<W> {
             xcb_sys::XCB_MAP_NOTIFY => {
                 let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_map_notify_event_t) };
                 if let Some(window) = self.window_manager.borrow().get(ev.window).cloned() {
-                    window.update_visibility(true);
-                    f(Event::Visibility {
-                        window_id: window.id().clone(),
-                        visible: true,
-                    });
+                    if window.update_visibility(true) {
+                        f(Event::Visibility {
+                            window_id: window.id().clone(),
+                            visible: true,
+                        });
+                    }
+                }
+            },
+
+            xcb_sys::XCB_REPARENT_NOTIFY => {
+                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_reparent_notify_event_t) };
+                if let Some(window) = self.window_manager.borrow().get(ev.window).cloned() {
+                    window.update_parent_xid(ev.parent);
                 }
             },
 
             xcb_sys::XCB_UNMAP_NOTIFY => {
                 let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_unmap_notify_event_t) };
                 if let Some(window) = self.window_manager.borrow().get(ev.window).cloned() {
-                    window.update_visibility(false);
-                    f(Event::Visibility {
-                        window_id: window.id().clone(),
-                        visible: false,
-                    });
+                    if window.update_visibility(false) {
+                        f(Event::Visibility {
+                            window_id: window.id().clone(),
+                            visible: false,
+                        });
+                    }
                 }
             },
 
