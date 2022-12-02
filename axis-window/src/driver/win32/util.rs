@@ -115,6 +115,13 @@ impl<I, T: 'static + ?Sized + IndexMut<I>> IndexMut<I> for LocalBox<T> {
     }
 }
 
+/// Sets the current thread's error code to 0.
+pub fn clear_last_error() {
+    unsafe {
+        winapi::um::errhandlingapi::SetLastError(0);
+    }
+}
+
 /// Returns the current .exe module handle.
 pub fn get_exe_handle() -> crate::error::Result<winapi::shared::minwindef::HINSTANCE> {
     unsafe {

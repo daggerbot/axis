@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::device::IDevice;
-use crate::driver::win32::context::Context;
+use crate::driver::win32::context::{Context, EventManager};
 use crate::driver::win32::pixel_format::PixelFormat;
 use crate::driver::win32::window::WindowBuilder;
 
@@ -21,13 +21,19 @@ pub type Devices<W> = Once<Device<W>>;
 /// Win32 window system device type.
 #[derive(Clone)]
 pub struct Device<W: 'static + Clone> {
+    event_manager: Rc<EventManager<W>>,
     _phantom: PhantomData<W>,
     unique: Rc<()>,
 }
 
 impl<W: 'static + Clone> Device<W> {
+    pub(crate) fn event_manager(&self) -> &Rc<EventManager<W>> {
+        &self.event_manager
+    }
+
     pub(crate) fn new(context: &Context<W>) -> Device<W> {
         Device {
+            event_manager: context.event_manager().clone(),
             _phantom: PhantomData,
             unique: context.unique().clone(),
         }
@@ -44,7 +50,7 @@ impl<W: 'static + Clone> IDevice for Device<W> {
     }
 
     fn new_window(&self) -> WindowBuilder<W> {
-        WindowBuilder::new()
+        WindowBuilder::new(self)
     }
 
     fn pixel_formats(&self) -> Once<PixelFormat> {

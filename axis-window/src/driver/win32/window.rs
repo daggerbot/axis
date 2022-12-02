@@ -15,16 +15,19 @@ use std::sync::{Arc, Mutex};
 
 use math::Vector2;
 
-use crate::driver::win32::context::Context;
+use crate::driver::win32::context::{Context, EventManager};
+use crate::driver::win32::device::Device;
 use crate::driver::win32::gdi::Dc;
 use crate::driver::win32::pixel_format::PixelFormat;
 use crate::driver::win32::util::{get_exe_handle, Win32Error};
 use crate::error::{ErrorKind, Result};
+use crate::event::Event;
 use crate::window::{IWindow, IWindowBuilder, WindowKind, WindowPos};
 use crate::Coord;
 
 /// Win32 window builder type.
 pub struct WindowBuilder<W: 'static + Clone> {
+    event_manager: Rc<EventManager<W>>,
     kind: WindowKind,
     _phantom: PhantomData<W>,
     pixel_format: PixelFormat,
@@ -34,8 +37,9 @@ pub struct WindowBuilder<W: 'static + Clone> {
 }
 
 impl<W: 'static + Clone> WindowBuilder<W> {
-    pub(crate) fn new() -> WindowBuilder<W> {
+    pub(crate) fn new(device: &Device<W>) -> WindowBuilder<W> {
         WindowBuilder {
+            event_manager: device.event_manager().clone(),
             kind: WindowKind::Normal,
             _phantom: PhantomData,
             pixel_format: PixelFormat::Default,
@@ -124,6 +128,7 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
 
         let window = Window {
             shared: Rc::new(WindowShared {
+                event_manager: self.event_manager.clone(),
                 hwnd: Cell::new(Some(hwnd)),
                 id,
             }),
@@ -142,6 +147,7 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
 
 /// Data shared between a [`Window`] and its underlying `HWND`.
 pub struct WindowShared<W: 'static + Clone> {
+    event_manager: Rc<EventManager<W>>,
     hwnd: Cell<Option<winapi::shared::windef::HWND>>,
     id: W,
 }
@@ -281,6 +287,20 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         };
         style & winapi::um::winuser::WS_VISIBLE != 0
     }
+
+    fn set_visible(&mut self, visible: bool) -> Result<()> {
+        let hwnd = self.shared.try_hwnd()?;
+        let command = match visible {
+            false => winapi::um::winuser::SW_HIDE,
+            true => winapi::um::winuser::SW_SHOW,
+        };
+
+        unsafe {
+            winapi::um::winuser::ShowWindow(hwnd, command);
+        }
+
+        Ok(())
+    }
 }
 
 /// Registers the Win32 window class.
@@ -374,15 +394,35 @@ unsafe extern "system" fn wndproc<W: 'static + Clone>(
     hwnd: winapi::shared::windef::HWND, msg: u32, wparam: usize, lparam: isize,
 ) -> isize {
     match msg {
+        winapi::um::winuser::WM_CLOSE => {
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                window.event_manager.push(Event::Close {
+                    window_id: window.id.clone(),
+                });
+            }
+            0
+        },
+
         winapi::um::winuser::WM_DESTROY => {
-            if let Some(shared) = WindowShared::<W>::from_hwnd(hwnd) {
-                shared.hwnd.set(None);
-                let result = shared.set_window_long_ptr(winapi::um::winuser::GWLP_USERDATA, 0);
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                window.hwnd.set(None);
+                let result = window.set_window_long_ptr(winapi::um::winuser::GWLP_USERDATA, 0);
                 if let Ok(shared_ptr) = result {
                     let _ = Rc::from_raw(shared_ptr as *const WindowShared<W>);
                 }
+                window.event_manager.push(Event::Destroy {
+                    window_id: window.id.clone(),
+                });
+            }
+            0
+        },
 
-                // TODO: handle event
+        winapi::um::winuser::WM_SHOWWINDOW => {
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                window.event_manager.push(Event::Visibility {
+                    visible: wparam != 0,
+                    window_id: window.id.clone(),
+                });
             }
             0
         },

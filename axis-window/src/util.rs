@@ -8,6 +8,23 @@
 
 use math::Zero;
 
+/// Object which invokes a callback from its destructor.
+pub struct Finally<F: FnMut()> {
+    f: F,
+}
+
+impl<F: FnMut()> Finally<F> {
+    pub fn new(f: F) -> Finally<F> {
+        Finally { f }
+    }
+}
+
+impl<F: FnMut()> Drop for Finally<F> {
+    fn drop(&mut self) {
+        (self.f)();
+    }
+}
+
 /// Box type which frees its data with [`libc::free`]. This can be removed when
 /// [`std::alloc::Allocator`] becomes stable.
 #[cfg(feature = "libc")]
