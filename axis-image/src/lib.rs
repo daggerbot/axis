@@ -23,8 +23,6 @@ mod generate;
 mod image;
 mod map;
 mod subimage;
-#[allow(dead_code)]
-mod util;
 mod vec_image;
 
 pub use bitmap::Bitmap;

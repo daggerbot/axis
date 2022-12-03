@@ -8,21 +8,18 @@
 
 use math::Zero;
 
-/// Object which invokes a callback from its destructor.
-pub struct Finally<F: FnMut()> {
-    f: F,
-}
-
-impl<F: FnMut()> Finally<F> {
-    pub fn new(f: F) -> Finally<F> {
-        Finally { f }
+/// Generic implementation of ISO C's `strlen()`.
+pub unsafe fn strlen<T: Copy + Eq + Zero>(mut ptr: *const T) -> usize {
+    if ptr.is_null() {
+        return 0;
     }
-}
-
-impl<F: FnMut()> Drop for Finally<F> {
-    fn drop(&mut self) {
-        (self.f)();
+    let mut len = 0;
+    let zero = T::zero();
+    while *ptr != zero {
+        len += 1;
+        ptr = (ptr as usize + std::mem::size_of::<T>()) as *const T;
     }
+    len
 }
 
 #[cfg(feature = "libc")]
@@ -85,28 +82,3 @@ mod libc {
 
 #[cfg(feature = "libc")]
 pub use self::libc::*;
-
-/// Clamps a value within a range. The result is undefined if `min` > `max`.
-pub fn clamp<T: Ord>(x: T, min: T, max: T) -> T {
-    if x < min {
-        min
-    } else if x > max {
-        max
-    } else {
-        x
-    }
-}
-
-/// Generic implementation of ISO C's `strlen()`.
-pub unsafe fn strlen<T: Eq + Zero>(mut ptr: *const T) -> usize {
-    if ptr.is_null() {
-        return 0;
-    }
-    let mut len = 0;
-    let zero = T::zero();
-    while *ptr != zero {
-        len += 1;
-        ptr = (ptr as usize + std::mem::size_of::<T>()) as *const T;
-    }
-    len
-}

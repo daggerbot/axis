@@ -11,7 +11,8 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::device::IDevice;
-use crate::driver::win32::context::{Context, EventManager};
+use crate::driver::win32::context::Context;
+use crate::driver::win32::event::EventManager;
 use crate::driver::win32::pixel_format::PixelFormat;
 use crate::driver::win32::window::WindowBuilder;
 

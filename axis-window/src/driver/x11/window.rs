@@ -13,11 +13,11 @@ use std::rc::Rc;
 use math::{TryFromComposite, Vector2};
 
 use crate::device::IDevice;
-use crate::driver::x11::context::{Atoms, Connection, Context};
+use crate::driver::x11::connection::{ChangePropertyMode, Connection, PropertyValue};
+use crate::driver::x11::context::{Atoms, Context};
 use crate::driver::x11::device::Device;
 use crate::driver::x11::pixel_format::PixelFormat;
 use crate::error::Result;
-use crate::util::{clamp, CBox};
 use crate::window::{IWindow, IWindowBuilder, WindowPos};
 use crate::Coord;
 
@@ -74,15 +74,15 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
             WindowPos::Default => Vector2::new(0, 0),  // TODO
             WindowPos::Centered => Vector2::new(0, 0), // TODO
             WindowPos::Point(pos) => Vector2 {
-                x: clamp(pos.x, -0x8000, 0x7fff) as i16,
-                y: clamp(pos.y, -0x8000, 0x7fff) as i16,
+                x: math::clamp(pos.x, -0x8000, 0x7fff) as i16,
+                y: math::clamp(pos.y, -0x8000, 0x7fff) as i16,
             },
         };
         let size = match self.size {
             None => Vector2::new(640, 480), // TODO
             Some(size) => Vector2 {
-                x: clamp(size.x, 1, 0xffff) as u16,
-                y: clamp(size.y, 1, 0xffff) as u16,
+                x: math::clamp(size.x, 1, 0xffff) as u16,
+                y: math::clamp(size.y, 1, 0xffff) as u16,
             },
         };
 
@@ -138,7 +138,11 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
         }
 
         // Subscribe to close events.
-        window.set_atom_property(atoms.wm_protocols, &[atoms.wm_delete_window])?;
+        window.set_property(
+            atoms.WM_PROTOCOLS,
+            xcb_sys::XCB_ATOM_ATOM,
+            &[atoms.WM_DELETE_WINDOW],
+        )?;
 
         Ok(window)
     }
@@ -254,107 +258,26 @@ impl<W: 'static + Clone> Window<W> {
     pub fn connection(&self) -> &Rc<Connection> {
         &self.connection
     }
-
-    /// Returns the underlying X ID, or an error if the window has expired.
-    pub fn try_xid(&self) -> Result<u32> {
-        self.shared.try_xid()
-    }
 }
 
 impl<W: 'static + Clone> Window<W> {
-    pub(crate) fn get_u8_array_property(&self, property: u32, ty: u32) -> Result<Option<Vec<u8>>> {
-        const LONG_LENGTH: u16 = 64;
-        let xid = self.try_xid()?;
-        let mut long_offset = 0;
-        let mut value = Vec::new();
-
-        'request_loop: loop {
-            unsafe {
-                let cookie = xcb_sys::xcb_get_property(
-                    self.xcb,
-                    0,
-                    xid,
-                    property,
-                    ty,
-                    long_offset,
-                    u32::from(LONG_LENGTH),
-                );
-                let mut err_ptr = std::ptr::null_mut();
-                let reply_ptr = xcb_sys::xcb_get_property_reply(self.xcb, cookie, &mut err_ptr);
-                if reply_ptr.is_null() {
-                    if err_ptr.is_null() {
-                        return Err(err!(RequestFailed("X_GetProperty")));
-                    } else {
-                        let err = CBox::from_raw(err_ptr);
-                        return Err(err!(RequestFailed{"X_GetProperty: {:?}", err}));
-                    }
-                }
-                let reply = CBox::from_raw(reply_ptr);
-                let value_len =
-                    usize::try_from(xcb_sys::xcb_get_property_value_length(reply.as_ptr()))?;
-
-                if reply.format == 0 && value.is_empty() {
-                    return Ok(None);
-                } else if reply.format != 8 {
-                    println!("{:?}", reply);
-                    return Err(err!(EncodingError("x property format mismatch")));
-                }
-
-                value.extend(std::slice::from_raw_parts(
-                    xcb_sys::xcb_get_property_value(reply.as_ptr()) as *const u8,
-                    value_len,
-                ));
-
-                if value_len < usize::from(LONG_LENGTH) * 4 {
-                    break 'request_loop;
-                } else {
-                    long_offset += u32::from(LONG_LENGTH);
-                }
-            }
-        }
-
-        Ok(Some(value))
+    pub(crate) fn get_property_vec<T: PropertyValue>(
+        &self, property: u32, ty: u32,
+    ) -> Result<Option<Vec<T>>> {
+        self.connection
+            .get_property_vec(self.shared.try_xid()?, property, ty)
     }
 
-    pub(crate) fn set_atom_property(&self, property: u32, value: &[u32]) -> Result<()> {
-        self.set_u32_property(property, xcb_sys::XCB_ATOM_ATOM, value)
-    }
-
-    pub(crate) fn set_u8_property(&self, property: u32, ty: u32, value: &[u8]) -> Result<()> {
-        let xid = self.try_xid()?;
-
-        unsafe {
-            xcb_sys::xcb_change_property(
-                self.xcb,
-                xcb_sys::XCB_PROP_MODE_REPLACE as u8,
-                xid,
-                property,
-                ty,
-                8,
-                u32::try_from(value.len()).unwrap(),
-                value.as_ptr() as *const _,
-            );
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn set_u32_property(&self, property: u32, ty: u32, value: &[u32]) -> Result<()> {
-        let xid = self.try_xid()?;
-
-        unsafe {
-            xcb_sys::xcb_change_property(
-                self.xcb,
-                xcb_sys::XCB_PROP_MODE_REPLACE as u8,
-                xid,
-                property,
-                ty,
-                32,
-                u32::try_from(value.len()).unwrap(),
-                value.as_ptr() as *const _,
-            );
-        }
-
+    pub(crate) fn set_property<T: PropertyValue>(
+        &self, property: u32, ty: u32, value: &[T],
+    ) -> Result<()> {
+        self.connection.change_property(
+            ChangePropertyMode::Replace,
+            self.shared.try_xid()?,
+            property,
+            ty,
+            value,
+        );
         Ok(())
     }
 }
@@ -396,9 +319,9 @@ impl<W: 'static + Clone> IWindow for Window<W> {
     }
 
     fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
-        let xid = self.try_xid()?;
-        let x = clamp(pos.x, Coord::from(i16::MIN), Coord::from(i16::MAX)) as i16;
-        let y = clamp(pos.y, Coord::from(i16::MIN), Coord::from(i16::MAX)) as i16;
+        let xid = self.shared.try_xid()?;
+        let x = math::clamp(pos.x, Coord::from(i16::MIN), Coord::from(i16::MAX)) as i16;
+        let y = math::clamp(pos.y, Coord::from(i16::MIN), Coord::from(i16::MAX)) as i16;
 
         unsafe {
             xcb_sys::xcb_configure_window(
@@ -413,9 +336,9 @@ impl<W: 'static + Clone> IWindow for Window<W> {
     }
 
     fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
-        let xid = self.try_xid()?;
-        let width = clamp(size.x, 1, Coord::from(u16::MAX)) as u16;
-        let height = clamp(size.y, 1, Coord::from(u16::MAX)) as u16;
+        let xid = self.shared.try_xid()?;
+        let width = math::clamp(size.x, 1, Coord::from(u16::MAX)) as u16;
+        let height = math::clamp(size.y, 1, Coord::from(u16::MAX)) as u16;
 
         unsafe {
             xcb_sys::xcb_configure_window(
@@ -431,19 +354,19 @@ impl<W: 'static + Clone> IWindow for Window<W> {
 
     fn set_title(&mut self, title: &str) -> Result<()> {
         let bytes = title.as_bytes();
-        self.set_u8_property(xcb_sys::XCB_ATOM_WM_NAME, xcb_sys::XCB_ATOM_STRING, bytes)?;
-        self.set_u8_property(
+        self.set_property(xcb_sys::XCB_ATOM_WM_NAME, xcb_sys::XCB_ATOM_STRING, bytes)?;
+        self.set_property(
             xcb_sys::XCB_ATOM_WM_ICON_NAME,
             xcb_sys::XCB_ATOM_STRING,
             bytes,
         )?;
-        self.set_u8_property(self.atoms.net_wm_name, self.atoms.utf8_string, bytes)?;
-        self.set_u8_property(self.atoms.net_wm_icon_name, self.atoms.utf8_string, bytes)?;
+        self.set_property(self.atoms._NET_WM_NAME, self.atoms.UTF8_STRING, bytes)?;
+        self.set_property(self.atoms._NET_WM_ICON_NAME, self.atoms.UTF8_STRING, bytes)?;
         Ok(())
     }
 
     fn set_visible(&mut self, visible: bool) -> Result<()> {
-        let xid = self.try_xid()?;
+        let xid = self.shared.try_xid()?;
 
         unsafe {
             if visible {
@@ -464,11 +387,11 @@ impl<W: 'static + Clone> IWindow for Window<W> {
     }
 
     fn title(&self) -> Result<String> {
-        match self.get_u8_array_property(self.atoms.net_wm_name, self.atoms.utf8_string)? {
+        match self.get_property_vec::<u8>(self.atoms._NET_WM_NAME, self.atoms.UTF8_STRING)? {
             None => (),
             Some(bytes) => return Ok(String::from_utf8(bytes)?),
         }
-        match self.get_u8_array_property(xcb_sys::XCB_ATOM_WM_NAME, xcb_sys::XCB_ATOM_STRING)? {
+        match self.get_property_vec::<u8>(xcb_sys::XCB_ATOM_WM_NAME, xcb_sys::XCB_ATOM_STRING)? {
             None => Ok(String::new()),
             Some(bytes) => Ok(String::from_utf8(bytes)?),
         }

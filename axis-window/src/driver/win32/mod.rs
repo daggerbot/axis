@@ -8,10 +8,12 @@
 
 mod context;
 mod device;
+mod error;
+mod event;
+#[allow(dead_code)]
+mod ffi;
 mod gdi;
 mod pixel_format;
-#[allow(dead_code)]
-mod util;
 mod window;
 
 pub use self::context::Context;

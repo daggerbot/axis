@@ -1,0 +1,183 @@
+/*
+ * Copyright (c) 2022 Martin Mills <daggerbot@gmail.com>
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::ffi::c_void;
+use std::marker::PhantomData;
+use std::rc::Rc;
+
+use math::Vector2;
+
+use crate::driver::win32::window::WindowShared;
+use crate::event::Event;
+use crate::Coord;
+
+/// Thunk type used by [`EventHandler`].
+#[derive(Clone, Copy)]
+struct EventThunk<W: 'static + Clone> {
+    f: unsafe fn(event: Event<W>, user_data: *mut c_void),
+    user_data: *mut c_void,
+}
+
+impl<W: 'static + Clone> EventThunk<W> {
+    unsafe fn invoke(&mut self, event: Event<W>) {
+        (self.f)(event, self.user_data);
+    }
+
+    fn new<F: FnMut(Event<W>)>(f: &F) -> EventThunk<W> {
+        EventThunk {
+            f: EventThunk::thunk::<F>,
+            user_data: f as *const F as *const c_void as *mut c_void,
+        }
+    }
+
+    unsafe fn thunk<F: FnMut(Event<W>)>(event: Event<W>, user_data: *mut c_void) {
+        let user_data = user_data as *mut F;
+        (*user_data)(event);
+    }
+}
+
+/// Handles incoming Win32 messages by either dispatching them to a Rust callback or queuing them.
+pub struct EventManager<W: 'static + Clone> {
+    callbacks: RefCell<Vec<Rc<RefCell<EventThunk<W>>>>>,
+    queue: RefCell<VecDeque<Event<W>>>,
+}
+
+impl<W: 'static + Clone> EventManager<W> {
+    pub fn new() -> EventManager<W> {
+        EventManager {
+            callbacks: RefCell::new(Vec::new()),
+            queue: RefCell::new(VecDeque::new()),
+        }
+    }
+
+    /// Pops the next queued event.
+    pub fn pop(&self) -> Option<Event<W>> {
+        self.queue.borrow_mut().pop_front()
+    }
+
+    /// Dispatches or enqueues the event.
+    pub unsafe fn push(&self, event: Event<W>) {
+        match self.top_callback() {
+            None => self.queue.borrow_mut().push_back(event),
+            Some(callback) => match callback.try_borrow_mut() {
+                Ok(mut callback) => callback.invoke(event),
+                Err(_) => self.queue.borrow_mut().push_back(event),
+            },
+        }
+    }
+}
+
+impl<W: 'static + Clone> EventManager<W> {
+    fn top_callback(&self) -> Option<Rc<RefCell<EventThunk<W>>>> {
+        self.callbacks.borrow_mut().last().cloned()
+    }
+}
+
+/// Holds an item on an [`EventManager`]'s callback stack.
+pub struct EventHandler<'a, 'f, W: 'static + Clone> {
+    event_manager: &'a EventManager<W>,
+    _phantom: PhantomData<&'f mut ()>,
+    top: usize,
+}
+
+impl<'a, 'f, W: 'static + Clone> EventHandler<'a, 'f, W> {
+    pub unsafe fn push<F: 'f + FnMut(Event<W>)>(
+        event_manager: &'a EventManager<W>, f: &'f mut F,
+    ) -> EventHandler<'a, 'f, W> {
+        let top = event_manager.callbacks.borrow().len();
+
+        event_manager
+            .callbacks
+            .borrow_mut()
+            .push(Rc::new(RefCell::new(EventThunk::new(f))));
+
+        EventHandler {
+            event_manager,
+            _phantom: PhantomData,
+            top,
+        }
+    }
+}
+
+impl<'a, 'f, W: 'static + Clone> Drop for EventHandler<'a, 'f, W> {
+    fn drop(&mut self) {
+        let mut callbacks = self.event_manager.callbacks.borrow_mut();
+        while callbacks.len() > self.top {
+            callbacks.pop();
+        }
+    }
+}
+
+/// Window message handler.
+pub unsafe extern "system" fn wndproc<W: 'static + Clone>(
+    hwnd: winapi::shared::windef::HWND, msg: u32, wparam: usize, lparam: isize,
+) -> isize {
+    match msg {
+        winapi::um::winuser::WM_CLOSE => {
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                window.event_manager().push(Event::Close {
+                    window_id: window.id().clone(),
+                });
+            }
+            0
+        },
+
+        winapi::um::winuser::WM_DESTROY => {
+            if let Some(window) = WindowShared::<W>::expire(hwnd) {
+                window.event_manager().push(Event::Destroy {
+                    window_id: window.id().clone(),
+                });
+            }
+            0
+        },
+
+        winapi::um::winuser::WM_MOVE => {
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                let x = winapi::shared::minwindef::LOWORD(lparam as u32) as i16;
+                let y = winapi::shared::minwindef::HIWORD(lparam as u32) as i16;
+                window.event_manager().push(Event::Move {
+                    window_id: window.id().clone(),
+                    pos: Vector2 {
+                        x: Coord::from(x),
+                        y: Coord::from(y),
+                    },
+                });
+            }
+            0
+        },
+
+        winapi::um::winuser::WM_SHOWWINDOW => {
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                window.event_manager().push(Event::Visibility {
+                    visible: wparam != 0,
+                    window_id: window.id().clone(),
+                });
+            }
+            0
+        },
+
+        winapi::um::winuser::WM_SIZE => {
+            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
+                let width = winapi::shared::minwindef::LOWORD(lparam as u32);
+                let height = winapi::shared::minwindef::HIWORD(lparam as u32);
+                window.event_manager().push(Event::Resize {
+                    window_id: window.id().clone(),
+                    size: Vector2 {
+                        x: Coord::from(width),
+                        y: Coord::from(height),
+                    },
+                });
+            }
+            0
+        },
+
+        _ => winapi::um::winuser::DefWindowProcW(hwnd, msg, wparam, lparam),
+    }
+}

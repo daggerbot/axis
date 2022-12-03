@@ -11,7 +11,8 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::device::IDevice;
-use crate::driver::x11::context::{Atoms, Connection, Context};
+use crate::driver::x11::connection::Connection;
+use crate::driver::x11::context::{Atoms, Context};
 use crate::driver::x11::pixel_format::{PixelFormat, PixelFormats};
 use crate::driver::x11::window::{WindowBuilder, WindowManager};
 

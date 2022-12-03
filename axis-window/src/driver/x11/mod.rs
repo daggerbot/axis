@@ -6,12 +6,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+mod connection;
 mod context;
 mod device;
+mod event;
 mod pixel_format;
 mod window;
 
-pub use self::context::{Connection, Context};
+pub use self::connection::Connection;
+pub use self::context::Context;
 pub use self::device::{Device, Devices};
 pub use self::pixel_format::{PixelFormat, PixelFormats};
 pub use self::window::{Window, WindowBuilder};

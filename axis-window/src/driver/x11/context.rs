@@ -6,186 +6,48 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use std::cell::RefCell;
-use std::ffi::{c_char, CString};
+use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
-use std::os::unix::io::{AsFd, BorrowedFd};
 use std::rc::Rc;
 
-use math::{FromComposite, Vector2};
-
 use crate::context::{IContext, MainLoop};
+use crate::driver::x11::connection::Connection;
 use crate::driver::x11::device::{Device, Devices};
 use crate::driver::x11::pixel_format::{PixelFormat, PixelFormats};
 use crate::driver::x11::window::{Window, WindowBuilder, WindowManager};
 use crate::error::Result;
 use crate::event::{Event, UpdateKind};
-use crate::util::CBox;
+use crate::ffi::CBox;
 
-/// Connection to an X11 server.
-pub struct Connection {
-    default_screen_index: u8,
-    xcb: *mut xcb_sys::xcb_connection_t,
-    #[cfg(feature = "x11-sys")]
-    xlib: *mut x11_sys::Display,
-}
-
-impl Connection {
-    /// Returns the index of the default screen.
-    pub fn default_screen_index(&self) -> u8 {
-        self.default_screen_index
-    }
-
-    /// Opens a connection to the specified X server.
-    ///
-    /// If the `x11-sys` feature is enabled, the Xlib API owns the event queue by default.
-    pub fn open<S: Into<Vec<u8>>>(name: S) -> Result<Connection> {
-        let c_name = CString::new(name)?;
-
-        unsafe { Connection::open_raw(c_name.as_ptr()) }
-    }
-
-    /// Opens a connection to the default X server.
-    ///
-    /// If the `x11-sys` feature is enabled, the Xlib API owns the event queue by default.
-    pub fn open_default() -> Result<Connection> {
-        unsafe { Connection::open_raw(std::ptr::null()) }
-    }
-
-    /// Returns a pointer to the underlying XCB connection.
-    pub fn xcb_connection_ptr(&self) -> *mut xcb_sys::xcb_connection_t {
-        self.xcb
-    }
-
-    /// Returns a pointer to the underlying Xlib display connection.
-    #[cfg(feature = "x11-sys")]
-    pub fn xlib_display_ptr(&self) -> *mut x11_sys::Display {
-        self.xlib
-    }
-}
-
-impl Connection {
-    pub(crate) fn intern_atom<S: ?Sized + AsRef<[u8]>>(
-        &self, name: &S,
-    ) -> xcb_sys::xcb_intern_atom_cookie_t {
-        let name = name.as_ref();
-
-        unsafe {
-            xcb_sys::xcb_intern_atom(
-                self.xcb,
-                0,
-                u16::try_from(name.len()).unwrap(),
-                name.as_ptr() as *const c_char,
-            )
+/// Macro which defines our `Atoms` struct.
+macro_rules! atoms {
+    { $($atom:ident,)* } => {
+        /// Commonly used X11 atoms.
+        #[allow(non_snake_case)]
+        #[derive(Clone, Copy)]
+        pub struct Atoms {
+            $(pub $atom: u32,)*
         }
-    }
 
-    pub(crate) fn intern_atom_reply(
-        &self, cookie: xcb_sys::xcb_intern_atom_cookie_t,
-    ) -> Result<u32> {
-        unsafe {
-            let mut err_ptr = std::ptr::null_mut();
-            let reply_ptr = xcb_sys::xcb_intern_atom_reply(self.xcb, cookie, &mut err_ptr);
-            if reply_ptr.is_null() {
-                if err_ptr.is_null() {
-                    return Err(err!(RequestFailed("XInternAtom")));
-                } else {
-                    let err = CBox::from_raw(err_ptr);
-                    return Err(err!(RequestFailed{"XInternAtom: {:?}", *err}));
-                }
+        impl Atoms {
+            #[allow(non_snake_case)]
+            fn init(connection: &Connection) -> Result<Atoms> {
+                $(let $atom = connection.intern_atom(stringify!($atom));)*
+
+                Ok(Atoms {
+                    $($atom: connection.intern_atom_reply($atom)?,)*
+                })
             }
-            let reply = CBox::from_raw(reply_ptr);
-            Ok(reply.atom)
         }
-    }
+    };
 }
 
-impl Connection {
-    /// Opens a connection to the specified X server.
-    #[cfg(not(feature = "x11-sys"))]
-    unsafe fn open_raw(name: *const c_char) -> Result<Connection> {
-        let mut default_screen_index = 0;
-        let xcb = xcb_sys::xcb_connect(name, &mut default_screen_index);
-        if xcb.is_null() {
-            return Err(err!(ConnectionFailed("xcb_connect failed")));
-        }
-
-        Ok(Connection {
-            default_screen_index: u8::try_from(default_screen_index)?,
-            xcb,
-        })
-    }
-
-    /// Opens a connection to the specified X server.
-    #[cfg(feature = "x11-sys")]
-    unsafe fn open_raw(name: *const c_char) -> Result<Connection> {
-        let xlib = x11_sys::XOpenDisplay(name);
-        if xlib.is_null() {
-            return Err(err!(ConnectionFailed("XOpenDisplay failed")));
-        }
-
-        Ok(Connection {
-            default_screen_index: u8::try_from(x11_sys::XDefaultScreen(xlib))?,
-            xcb: x11_sys::XGetXCBConnection(xlib) as *mut xcb_sys::xcb_connection_t,
-            xlib,
-        })
-    }
-}
-
-impl AsFd for Connection {
-    fn as_fd(&self) -> BorrowedFd {
-        unsafe { BorrowedFd::borrow_raw(xcb_sys::xcb_get_file_descriptor(self.xcb)) }
-    }
-}
-
-impl Drop for Connection {
-    fn drop(&mut self) {
-        #[cfg(not(feature = "x11-sys"))]
-        unsafe {
-            xcb_sys::xcb_disconnect(self.xcb);
-        }
-
-        #[cfg(feature = "x11-sys")]
-        unsafe {
-            x11_sys::XCloseDisplay(self.xlib);
-        }
-    }
-}
-
-impl Eq for Connection {}
-
-impl PartialEq for Connection {
-    fn eq(&self, rhs: &Connection) -> bool {
-        self as *const Connection == rhs as *const Connection
-    }
-}
-
-/// Commonly used X atoms.
-#[derive(Clone, Copy)]
-pub struct Atoms {
-    pub net_wm_icon_name: u32,
-    pub net_wm_name: u32,
-    pub utf8_string: u32,
-    pub wm_delete_window: u32,
-    pub wm_protocols: u32,
-}
-
-impl Atoms {
-    fn intern(connection: &Connection) -> Result<Atoms> {
-        let net_wm_icon_name = connection.intern_atom("_NET_WM_ICON_NAME");
-        let net_wm_name = connection.intern_atom("_NET_WM_NAME");
-        let utf8_string = connection.intern_atom("UTF8_STRING");
-        let wm_delete_window = connection.intern_atom("WM_DELETE_WINDOW");
-        let wm_protocols = connection.intern_atom("WM_PROTOCOLS");
-
-        Ok(Atoms {
-            net_wm_icon_name: connection.intern_atom_reply(net_wm_icon_name)?,
-            net_wm_name: connection.intern_atom_reply(net_wm_name)?,
-            utf8_string: connection.intern_atom_reply(utf8_string)?,
-            wm_delete_window: connection.intern_atom_reply(wm_delete_window)?,
-            wm_protocols: connection.intern_atom_reply(wm_protocols)?,
-        })
-    }
+atoms! {
+    _NET_WM_ICON_NAME,
+    _NET_WM_NAME,
+    UTF8_STRING,
+    WM_DELETE_WINDOW,
+    WM_PROTOCOLS,
 }
 
 /// X11 window system context.
@@ -234,111 +96,6 @@ impl<W: 'static + Clone> Context<W> {
             }
         }
     }
-
-    fn handle_client_message<F: FnMut(Event<W>)>(
-        &self, event: &xcb_sys::xcb_client_message_event_t, f: &mut F,
-    ) -> Result<()> {
-        if event.type_ == self.atoms.wm_protocols && event.format == 32 {
-            let protocol = unsafe { event.data.data32[0] };
-            if protocol == self.atoms.wm_delete_window {
-                if let Some(window) = self.window_manager.borrow().get(event.window).cloned() {
-                    f(Event::Close {
-                        window_id: window.id().clone(),
-                    });
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn handle_event<F: FnMut(Event<W>)>(
-        &self, xevent: CBox<xcb_sys::xcb_generic_event_t>, f: &mut F,
-    ) -> Result<()> {
-        let xevent_ref: &xcb_sys::xcb_generic_event_t = xevent.as_ref();
-        let xevent_ptr = xevent_ref as *const xcb_sys::xcb_generic_event_t;
-
-        match (xevent.response_type & !0x80) as u32 {
-            xcb_sys::XCB_CLIENT_MESSAGE => {
-                self.handle_client_message(
-                    unsafe { &(*(xevent_ptr as *const xcb_sys::xcb_client_message_event_t)) },
-                    f,
-                )?;
-            },
-
-            xcb_sys::XCB_CONFIGURE_NOTIFY => {
-                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_configure_notify_event_t) };
-                if let Some(window) = self.window_manager.borrow().get(ev.window) {
-                    let size = Vector2::new(ev.width, ev.height);
-                    if window.update_size(size) {
-                        f(Event::Resize {
-                            window_id: window.id().clone(),
-                            size: Vector2::from_composite(size),
-                        });
-                    }
-
-                    // We'll get repeated configure notify events if a window manager is active.
-                    // The X server and the window manager will give us different values for the
-                    // window's current position. Let's filter the event and pick the one that we
-                    // actually want.
-                    let is_server_event = xevent.response_type & 0x80 == 0;
-                    if is_server_event == window.is_parent_root() {
-                        let pos = Vector2::new(ev.x, ev.y);
-                        if window.update_pos(pos) {
-                            f(Event::Move {
-                                window_id: window.id().clone(),
-                                pos: Vector2::from_composite(pos),
-                            });
-                        }
-                    }
-                }
-            },
-
-            xcb_sys::XCB_DESTROY_NOTIFY => {
-                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_destroy_notify_event_t) };
-                if let Some(window) = self.window_manager.borrow_mut().expire(ev.window) {
-                    f(Event::Destroy {
-                        window_id: window.id().clone(),
-                    });
-                }
-            },
-
-            xcb_sys::XCB_MAP_NOTIFY => {
-                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_map_notify_event_t) };
-                if let Some(window) = self.window_manager.borrow().get(ev.window).cloned() {
-                    if window.update_visibility(true) {
-                        f(Event::Visibility {
-                            window_id: window.id().clone(),
-                            visible: true,
-                        });
-                    }
-                }
-            },
-
-            xcb_sys::XCB_REPARENT_NOTIFY => {
-                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_reparent_notify_event_t) };
-                if let Some(window) = self.window_manager.borrow().get(ev.window).cloned() {
-                    window.update_parent_xid(ev.parent);
-                }
-            },
-
-            xcb_sys::XCB_UNMAP_NOTIFY => {
-                let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_unmap_notify_event_t) };
-                if let Some(window) = self.window_manager.borrow().get(ev.window).cloned() {
-                    if window.update_visibility(false) {
-                        f(Event::Visibility {
-                            window_id: window.id().clone(),
-                            visible: false,
-                        });
-                    }
-                }
-            },
-
-            _ => (),
-        }
-
-        Ok(())
-    }
 }
 
 impl<W: 'static + Clone> Context<W> {
@@ -352,8 +109,8 @@ impl<W: 'static + Clone> Context<W> {
             );
         }
 
-        let atoms = Atoms::intern(&connection)?;
-        let xcb = connection.xcb;
+        let atoms = Atoms::init(&connection)?;
+        let xcb = connection.xcb_connection_ptr();
 
         Ok(Context {
             atoms: Rc::new(atoms),
@@ -378,7 +135,7 @@ impl<W: 'static + Clone> IContext for Context<W> {
 
     fn default_device(&self) -> Device<W> {
         for device in self.devices() {
-            if device.screen_index() == self.connection.default_screen_index {
+            if device.screen_index() == self.connection.default_screen_index() {
                 return device;
             }
         }
@@ -391,6 +148,11 @@ impl<W: 'static + Clone> IContext for Context<W> {
 
     fn run<F: FnMut(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, mut f: F) -> Result<()> {
         main_loop.clear_quit_flag();
+        let update_ready = Cell::new(true);
+        let mut f = |event| {
+            f(event);
+            update_ready.set(true);
+        };
 
         'main_loop: while !main_loop.is_quit_requested() {
             self.flush()?;
@@ -400,12 +162,16 @@ impl<W: 'static + Clone> IContext for Context<W> {
                 if xevent_ptr.is_null() {
                     match main_loop.update_kind() {
                         UpdateKind::Passive => {
-                            f(Event::Update {
-                                kind: UpdateKind::Passive,
-                            });
-                            if main_loop.is_quit_requested() {
-                                break 'main_loop;
+                            if update_ready.get() {
+                                f(Event::Update {
+                                    kind: UpdateKind::Passive,
+                                });
+                                if main_loop.is_quit_requested() {
+                                    break 'main_loop;
+                                }
+                                update_ready.set(false);
                             }
+
                             self.flush()?;
                             xevent_ptr = xcb_sys::xcb_wait_for_event(self.xcb);
                         },

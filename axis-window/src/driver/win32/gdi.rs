@@ -8,18 +8,18 @@
 
 use std::rc::Rc;
 
-use crate::driver::win32::util::Win32Error;
+use crate::driver::win32::error::Win32Error;
 use crate::driver::win32::window::WindowShared;
 use crate::error::Result;
 
-/// Wrapper around an `HDC`.
-pub struct Dc<W: 'static + Clone> {
+/// Wrapper around an `HDC` for a window.
+pub struct WindowDc<W: 'static + Clone> {
     hdc: winapi::shared::windef::HDC,
     window: Rc<WindowShared<W>>,
 }
 
-impl<W: 'static + Clone> Dc<W> {
-    pub fn get(window: &Rc<WindowShared<W>>) -> Result<Dc<W>> {
+impl<W: 'static + Clone> WindowDc<W> {
+    pub fn get(window: &Rc<WindowShared<W>>) -> Result<WindowDc<W>> {
         let hwnd = window.try_hwnd()?;
         let hdc;
 
@@ -31,7 +31,7 @@ impl<W: 'static + Clone> Dc<W> {
             return Err(err!(SystemError("GetDC"): Win32Error::last()));
         }
 
-        Ok(Dc {
+        Ok(WindowDc {
             hdc,
             window: window.clone(),
         })
@@ -42,7 +42,7 @@ impl<W: 'static + Clone> Dc<W> {
     }
 }
 
-impl<W: 'static + Clone> Drop for Dc<W> {
+impl<W: 'static + Clone> Drop for WindowDc<W> {
     fn drop(&mut self) {
         if let Ok(hwnd) = self.window.try_hwnd() {
             unsafe {

@@ -8,7 +8,7 @@
 
 use std::rc::Rc;
 
-use crate::driver::x11::context::Connection;
+use crate::driver::x11::connection::Connection;
 use crate::driver::x11::device::Device;
 use crate::pixel_format::IPixelFormat;
 

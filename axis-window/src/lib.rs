@@ -35,9 +35,9 @@ mod context;
 mod device;
 mod error;
 mod event;
-mod pixel_format;
 #[allow(dead_code)]
-mod util;
+mod ffi;
+mod pixel_format;
 mod window;
 
 pub use context::{Context, IContext, MainLoop};

@@ -13,15 +13,16 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use math::Vector2;
+use math::{IntoLossy, Vector2};
 
-use crate::driver::win32::context::{Context, EventManager};
+use crate::driver::win32::context::Context;
 use crate::driver::win32::device::Device;
-use crate::driver::win32::gdi::Dc;
+use crate::driver::win32::error::{clear_last_error, Win32Error};
+use crate::driver::win32::event::EventManager;
+use crate::driver::win32::ffi::get_exe_handle;
+use crate::driver::win32::gdi::WindowDc;
 use crate::driver::win32::pixel_format::PixelFormat;
-use crate::driver::win32::util::{clear_last_error, get_exe_handle, Win32Error};
 use crate::error::{ErrorKind, Result};
-use crate::event::Event;
 use crate::window::{IWindow, IWindowBuilder, WindowKind, WindowPos};
 use crate::Coord;
 
@@ -180,6 +181,41 @@ pub struct WindowShared<W: 'static + Clone> {
 }
 
 impl<W: 'static + Clone> WindowShared<W> {
+    pub fn event_manager(&self) -> &Rc<EventManager<W>> {
+        &self.event_manager
+    }
+
+    pub unsafe fn expire(hwnd: winapi::shared::windef::HWND) -> Option<Rc<WindowShared<W>>> {
+        let window_ref = match WindowShared::<W>::from_hwnd(hwnd) {
+            None => return None,
+            Some(w) => w,
+        };
+        let window = Rc::from_raw(window_ref as *const WindowShared<W>);
+        window.hwnd.set(None);
+        winapi::um::winuser::SetWindowLongPtrW(hwnd, winapi::um::winuser::GWLP_USERDATA, 0);
+        Some(window)
+    }
+
+    pub unsafe fn from_hwnd<'a>(hwnd: winapi::shared::windef::HWND) -> Option<&'a WindowShared<W>> {
+        if hwnd.is_null() {
+            return None;
+        }
+        winapi::um::errhandlingapi::SetLastError(0);
+        let value =
+            winapi::um::winuser::GetWindowLongPtrW(hwnd, winapi::um::winuser::GWLP_USERDATA);
+        if let Some(err) = Win32Error::try_last() {
+            error!("GetWindowLongPtrW: {}", err);
+            return None;
+        } else if value == 0 {
+            return None;
+        }
+        Some(&*(value as *const WindowShared<W>))
+    }
+
+    pub fn id(&self) -> &W {
+        &self.id
+    }
+
     pub fn try_hwnd(&self) -> Result<winapi::shared::windef::HWND> {
         match self.hwnd.get() {
             None => Err(err!(ResourceExpired("window destroyed"))),
@@ -199,22 +235,6 @@ impl<W: 'static + Clone> WindowShared<W> {
         }
     }
 
-    unsafe fn from_hwnd<'a>(hwnd: winapi::shared::windef::HWND) -> Option<&'a WindowShared<W>> {
-        if hwnd.is_null() {
-            return None;
-        }
-        winapi::um::errhandlingapi::SetLastError(0);
-        let value =
-            winapi::um::winuser::GetWindowLongPtrW(hwnd, winapi::um::winuser::GWLP_USERDATA);
-        if let Some(err) = Win32Error::try_last() {
-            error!("GetWindowLongPtrW: {}", err);
-            return None;
-        } else if value == 0 {
-            return None;
-        }
-        Some(&*(value as *const WindowShared<W>))
-    }
-
     fn get_window_long(&self, index: i32) -> Result<i32> {
         unsafe {
             let hwnd = self.try_hwnd()?;
@@ -231,7 +251,7 @@ impl<W: 'static + Clone> WindowShared<W> {
         match *pixel_format {
             PixelFormat::Default => (),
             PixelFormat::Gdi { index, pfd } => {
-                let dc = Dc::get(self)?;
+                let dc = WindowDc::get(self)?;
                 let pfd_size = std::mem::size_of::<winapi::um::wingdi::PIXELFORMATDESCRIPTOR>();
 
                 unsafe {
@@ -266,11 +286,11 @@ impl<W: 'static + Clone> WindowShared<W> {
         unsafe {
             let hwnd = self.try_hwnd()?;
             winapi::um::errhandlingapi::SetLastError(0);
-            let prev = winapi::um::winuser::SetWindowLongPtrW(hwnd, index, value);
+            let prev = winapi::um::winuser::SetWindowLongPtrW(hwnd, index, value.into_lossy());
             if let Some(err) = Win32Error::try_last() {
                 return Err(err!(SystemError("SetWindowLongPtrW"): err));
             }
-            Ok(prev)
+            Ok(prev as isize)
         }
     }
 }
@@ -495,7 +515,7 @@ impl WindowClassManager {
         let mut wc = winapi::um::winuser::WNDCLASSEXW {
             cbSize: std::mem::size_of::<winapi::um::winuser::WNDCLASSEXW>() as u32,
             style: 0,
-            lpfnWndProc: Some(wndproc::<W>),
+            lpfnWndProc: Some(crate::driver::win32::event::wndproc::<W>),
             cbClsExtra: 0,
             cbWndExtra: 0,
             hInstance: hinstance,
@@ -519,7 +539,7 @@ impl WindowClassManager {
             unsafe {
                 if winapi::um::winuser::RegisterClassExW(&wc) == 0 {
                     let err = Win32Error::last();
-                    match err.0 {
+                    match err.code() {
                         winapi::shared::winerror::ERROR_CLASS_ALREADY_EXISTS => {
                             self.next_num += 1;
                             continue 'name_loop;
@@ -536,77 +556,5 @@ impl WindowClassManager {
         self.map.insert(type_id, Arc::new(name));
         self.next_num += 1;
         Ok(name_ptr)
-    }
-}
-
-/// Window message handler.
-unsafe extern "system" fn wndproc<W: 'static + Clone>(
-    hwnd: winapi::shared::windef::HWND, msg: u32, wparam: usize, lparam: isize,
-) -> isize {
-    match msg {
-        winapi::um::winuser::WM_CLOSE => {
-            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
-                window.event_manager.push(Event::Close {
-                    window_id: window.id.clone(),
-                });
-            }
-            0
-        },
-
-        winapi::um::winuser::WM_DESTROY => {
-            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
-                window.hwnd.set(None);
-                let result = window.set_window_long_ptr(winapi::um::winuser::GWLP_USERDATA, 0);
-                if let Ok(shared_ptr) = result {
-                    let _ = Rc::from_raw(shared_ptr as *const WindowShared<W>);
-                }
-                window.event_manager.push(Event::Destroy {
-                    window_id: window.id.clone(),
-                });
-            }
-            0
-        },
-
-        winapi::um::winuser::WM_MOVE => {
-            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
-                let x = winapi::shared::minwindef::LOWORD(lparam as u32) as i16;
-                let y = winapi::shared::minwindef::HIWORD(lparam as u32) as i16;
-                window.event_manager.push(Event::Move {
-                    window_id: window.id.clone(),
-                    pos: Vector2 {
-                        x: Coord::from(x),
-                        y: Coord::from(y),
-                    },
-                });
-            }
-            0
-        },
-
-        winapi::um::winuser::WM_SHOWWINDOW => {
-            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
-                window.event_manager.push(Event::Visibility {
-                    visible: wparam != 0,
-                    window_id: window.id.clone(),
-                });
-            }
-            0
-        },
-
-        winapi::um::winuser::WM_SIZE => {
-            if let Some(window) = WindowShared::<W>::from_hwnd(hwnd) {
-                let width = winapi::shared::minwindef::LOWORD(lparam as u32);
-                let height = winapi::shared::minwindef::HIWORD(lparam as u32);
-                window.event_manager.push(Event::Resize {
-                    window_id: window.id.clone(),
-                    size: Vector2 {
-                        x: Coord::from(width),
-                        y: Coord::from(height),
-                    },
-                });
-            }
-            0
-        },
-
-        _ => winapi::um::winuser::DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }

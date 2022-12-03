@@ -11,10 +11,9 @@ use std::fmt::{Display, Formatter};
 use std::io::Write;
 
 use byteorder::WriteBytesExt;
-use math::Vector2;
+use math::{DivCeil, Vector2};
 
 use crate::codec::png::ColorType;
-use crate::util::div_ceil;
 
 /// Enumeration of PNG filter methods.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -84,7 +83,7 @@ impl<W: Write> BaseFilterer<W> {
         inner: W, image_size: Vector2<usize>, bit_depth: u8, color_type: ColorType,
     ) -> BaseFilterer<W> {
         let row_len = match bit_depth {
-            1 | 2 | 4 => div_ceil(image_size.x, 8 / bit_depth as usize),
+            1 | 2 | 4 => DivCeil::div_ceil(image_size.x, 8 / bit_depth as usize),
             8 => image_size.x * color_type.channel_count(),
             16 => image_size.x * color_type.channel_count() * 2,
             _ => unreachable!(),

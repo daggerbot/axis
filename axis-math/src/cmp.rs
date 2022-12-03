@@ -6,11 +6,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-/// Divides integers, returning the ceiling of the result rather than the floor.
-pub fn div_ceil(n: usize, d: usize) -> usize {
-    let mut r = n / d;
-    if n % d != 0 {
-        r += 1;
+/// Returns the closest value for `x` that lies between `min` and `max` inclusively. The result is
+/// undefined if `min > max`.
+pub fn clamp<T: Ord>(x: T, min: T, max: T) -> T {
+    if x < min {
+        min
+    } else if x > max {
+        max
+    } else {
+        x
     }
-    r
 }

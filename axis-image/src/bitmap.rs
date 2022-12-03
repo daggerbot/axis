@@ -6,10 +6,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use math::{TryMul, Vector2};
+use math::{DivCeil, TryMul, Vector2};
 
 use crate::image::{Image, ImageExt, ImageMut, OutOfBounds};
-use crate::util::div_ceil;
 
 /// Image type where each pixel is one bit.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
@@ -37,7 +36,7 @@ impl<'a, T: 'a + Into<bool>, I: 'a + Image<Pixel<'a> = T>> From<&'a I> for Bitma
         let size = src.size();
         let mut bitmap = Bitmap {
             buf: Vec::new(),
-            row_size: div_ceil(size.x, 8),
+            row_size: DivCeil::div_ceil(size.x, 8),
             size,
         };
 

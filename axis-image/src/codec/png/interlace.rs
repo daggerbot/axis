@@ -9,9 +9,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use math::{Saturate, TrySub, Vector2};
-
-use crate::util::div_ceil;
+use math::{DivCeil, Saturate, TrySub, Vector2};
 
 /// Enumeration of PNG interlace methods.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -136,8 +134,8 @@ impl Adam7Interlacer {
             pos: Vector2::new(0, 0),
             queue: Some(InterlacerItem::BeginPass {
                 size: Vector2 {
-                    x: div_ceil(image_size.x, 8),
-                    y: div_ceil(image_size.y, 8),
+                    x: DivCeil::div_ceil(image_size.x, 8),
+                    y: DivCeil::div_ceil(image_size.y, 8),
                 },
             }),
             stride: Vector2::new(8, 8),
@@ -189,11 +187,11 @@ impl Iterator for Adam7Interlacer {
                 self.offset_x = self.pos.x;
                 return Some(InterlacerItem::BeginPass {
                     size: Vector2 {
-                        x: div_ceil(
+                        x: DivCeil::div_ceil(
                             self.image_size.x.try_sub(self.pos.x).saturate(),
                             self.stride.x,
                         ),
-                        y: div_ceil(
+                        y: DivCeil::div_ceil(
                             self.image_size.y.try_sub(self.pos.y).saturate(),
                             self.stride.y,
                         ),
