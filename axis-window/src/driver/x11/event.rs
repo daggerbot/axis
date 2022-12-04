@@ -14,8 +14,8 @@ use crate::event::Event;
 use crate::ffi::CBox;
 
 impl<W: 'static + Clone> Context<W> {
-    pub(crate) fn handle_event<F: FnMut(Event<W>)>(
-        &self, xevent: CBox<xcb_sys::xcb_generic_event_t>, f: &mut F,
+    pub(crate) fn handle_event<F: Fn(Event<W>)>(
+        &self, xevent: CBox<xcb_sys::xcb_generic_event_t>, f: &F,
     ) -> Result<()> {
         let xevent_ref: &xcb_sys::xcb_generic_event_t = xevent.as_ref();
         let xevent_ptr = xevent_ref as *const xcb_sys::xcb_generic_event_t;
@@ -104,8 +104,8 @@ impl<W: 'static + Clone> Context<W> {
 }
 
 impl<W: 'static + Clone> Context<W> {
-    fn handle_client_message<F: FnMut(Event<W>)>(
-        &self, event: &xcb_sys::xcb_client_message_event_t, f: &mut F,
+    fn handle_client_message<F: Fn(Event<W>)>(
+        &self, event: &xcb_sys::xcb_client_message_event_t, f: &F,
     ) -> Result<()> {
         if event.type_ == self.atoms().WM_PROTOCOLS && event.format == 32 {
             let protocol = unsafe { event.data.data32[0] };

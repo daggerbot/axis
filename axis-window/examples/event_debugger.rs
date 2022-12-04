@@ -14,7 +14,7 @@ fn main() {
     let context: window::Context<()> =
         window::Context::open_default().expect("can't open window system context");
     let device = context.default_device();
-    let mut window = device
+    let window = device
         .new_window()
         .visible()
         .with_title("Event Debugger")

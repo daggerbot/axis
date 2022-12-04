@@ -32,7 +32,7 @@ pub trait IContext: 'static + Sized {
     fn devices(&self) -> Self::Devices;
 
     /// Runs the main loop.
-    fn run<F: FnMut(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, f: F) -> Result<()>;
+    fn run<F: Fn(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, f: F) -> Result<()>;
 }
 
 /// Window system context object trait.
@@ -41,7 +41,7 @@ pub trait IAnyContext {
 
     fn default_device(&self) -> Device<Self::WindowId>;
     fn devices(&self) -> Devices<Self::WindowId>;
-    fn run(&self, main_loop: &MainLoop, f: &mut dyn FnMut(Event<Self::WindowId>)) -> Result<()>;
+    fn run(&self, main_loop: &MainLoop, f: &dyn Fn(Event<Self::WindowId>)) -> Result<()>;
 }
 
 impl<T: IContext> IAnyContext for T {
@@ -57,7 +57,7 @@ impl<T: IContext> IAnyContext for T {
         ))
     }
 
-    fn run(&self, main_loop: &MainLoop, f: &mut dyn FnMut(Event<Self::WindowId>)) -> Result<()> {
+    fn run(&self, main_loop: &MainLoop, f: &dyn Fn(Event<Self::WindowId>)) -> Result<()> {
         IContext::run(self, main_loop, f)
     }
 }
@@ -95,8 +95,8 @@ impl<W: 'static + Clone> Context<W> {
     }
 
     /// Runs the main loop.
-    pub fn run<F: FnMut(Event<W>)>(&self, main_loop: &MainLoop, mut f: F) -> Result<()> {
-        self.0.run(main_loop, &mut f)
+    pub fn run<F: Fn(Event<W>)>(&self, main_loop: &MainLoop, f: F) -> Result<()> {
+        self.0.run(main_loop, &f)
     }
 }
 

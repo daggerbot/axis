@@ -315,7 +315,7 @@ impl<W: 'static + Clone> Drop for Window<W> {
 impl<W: 'static + Clone> IWindow for Window<W> {
     type Context = Context<W>;
 
-    fn destroy(&mut self) {
+    fn destroy(&self) {
         self.shared.destroy();
     }
 
@@ -356,7 +356,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         })
     }
 
-    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
+    fn set_pos(&self, pos: Vector2<Coord>) -> Result<()> {
         let hwnd = self.shared.try_hwnd()?;
 
         unsafe {
@@ -377,7 +377,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         Ok(())
     }
 
-    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
+    fn set_size(&self, size: Vector2<Coord>) -> Result<()> {
         let hwnd = self.shared.try_hwnd()?;
 
         unsafe {
@@ -398,7 +398,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         Ok(())
     }
 
-    fn set_title(&mut self, title: &str) -> Result<()> {
+    fn set_title(&self, title: &str) -> Result<()> {
         let hwnd = self.shared.try_hwnd()?;
         let wtitle: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
 
@@ -411,7 +411,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         Ok(())
     }
 
-    fn set_visible(&mut self, visible: bool) -> Result<()> {
+    fn set_visible(&self, visible: bool) -> Result<()> {
         let hwnd = self.shared.try_hwnd()?;
         let command = match visible {
             false => winapi::um::winuser::SW_HIDE,

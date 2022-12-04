@@ -144,7 +144,7 @@ pub trait IWindow {
     type Context: IContext<Window = Self>;
 
     /// Destroys the window.
-    fn destroy(&mut self);
+    fn destroy(&self);
 
     /// Returns the window ID.
     fn id(&self) -> &<Self::Context as IContext>::WindowId;
@@ -159,16 +159,16 @@ pub trait IWindow {
     fn pos(&self) -> Result<Vector2<Coord>>;
 
     /// Moves the window.
-    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()>;
+    fn set_pos(&self, pos: Vector2<Coord>) -> Result<()>;
 
     /// Resizes the window.
-    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()>;
+    fn set_size(&self, size: Vector2<Coord>) -> Result<()>;
 
     /// Changes the window title.
-    fn set_title(&mut self, title: &str) -> Result<()>;
+    fn set_title(&self, title: &str) -> Result<()>;
 
     /// Shows or hides the window.
-    fn set_visible(&mut self, visible: bool) -> Result<()>;
+    fn set_visible(&self, visible: bool) -> Result<()>;
 
     /// Returns the size of the window's client area in pixels.
     fn size(&self) -> Result<Vector2<Coord>>;
@@ -181,15 +181,15 @@ pub trait IWindow {
 pub trait IAnyWindow {
     type WindowId: 'static + Clone;
 
-    fn destroy(&mut self);
+    fn destroy(&self);
     fn id(&self) -> &Self::WindowId;
     fn is_alive(&self) -> bool;
     fn is_visible(&self) -> bool;
     fn pos(&self) -> Result<Vector2<Coord>>;
-    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()>;
-    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()>;
-    fn set_title(&mut self, title: &str) -> Result<()>;
-    fn set_visible(&mut self, visible: bool) -> Result<()>;
+    fn set_pos(&self, pos: Vector2<Coord>) -> Result<()>;
+    fn set_size(&self, size: Vector2<Coord>) -> Result<()>;
+    fn set_title(&self, title: &str) -> Result<()>;
+    fn set_visible(&self, visible: bool) -> Result<()>;
     fn size(&self) -> Result<Vector2<Coord>>;
     fn title(&self) -> Result<String>;
 }
@@ -197,7 +197,7 @@ pub trait IAnyWindow {
 impl<T: IWindow> IAnyWindow for T {
     type WindowId = <T::Context as IContext>::WindowId;
 
-    fn destroy(&mut self) {
+    fn destroy(&self) {
         IWindow::destroy(self);
     }
 
@@ -217,19 +217,19 @@ impl<T: IWindow> IAnyWindow for T {
         IWindow::pos(self)
     }
 
-    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
+    fn set_pos(&self, pos: Vector2<Coord>) -> Result<()> {
         IWindow::set_pos(self, pos)
     }
 
-    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
+    fn set_size(&self, size: Vector2<Coord>) -> Result<()> {
         IWindow::set_size(self, size)
     }
 
-    fn set_title(&mut self, title: &str) -> Result<()> {
+    fn set_title(&self, title: &str) -> Result<()> {
         IWindow::set_title(self, title)
     }
 
-    fn set_visible(&mut self, visible: bool) -> Result<()> {
+    fn set_visible(&self, visible: bool) -> Result<()> {
         IWindow::set_visible(self, visible)
     }
 
@@ -247,7 +247,7 @@ pub struct Window<W: 'static + Clone>(pub(crate) Box<dyn 'static + IAnyWindow<Wi
 
 impl<W: 'static + Clone> Window<W> {
     /// Destroys the window.
-    pub fn destroy(&mut self) {
+    pub fn destroy(&self) {
         self.0.destroy();
     }
 
@@ -272,22 +272,22 @@ impl<W: 'static + Clone> Window<W> {
     }
 
     /// Moves the window.
-    pub fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
+    pub fn set_pos(&self, pos: Vector2<Coord>) -> Result<()> {
         self.0.set_pos(pos)
     }
 
     /// Resizes the window.
-    pub fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
+    pub fn set_size(&self, size: Vector2<Coord>) -> Result<()> {
         self.0.set_size(size)
     }
 
     /// Changes the window title.
-    pub fn set_title(&mut self, title: &str) -> Result<()> {
+    pub fn set_title(&self, title: &str) -> Result<()> {
         self.0.set_title(title)
     }
 
     /// Shows or hides the window.
-    pub fn set_visible(&mut self, visible: bool) -> Result<()> {
+    pub fn set_visible(&self, visible: bool) -> Result<()> {
         self.0.set_visible(visible)
     }
 

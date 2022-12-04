@@ -146,11 +146,11 @@ impl<W: 'static + Clone> IContext for Context<W> {
         Devices::new(&self)
     }
 
-    fn run<F: FnMut(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, mut f: F) -> Result<()> {
+    fn run<F: Fn(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, callback: F) -> Result<()> {
         main_loop.clear_quit_flag();
         let update_ready = Cell::new(true);
-        let mut f = |event| {
-            f(event);
+        let f = |event| {
+            callback(event);
             update_ready.set(true);
         };
 
@@ -162,14 +162,13 @@ impl<W: 'static + Clone> IContext for Context<W> {
                 if xevent_ptr.is_null() {
                     match main_loop.update_kind() {
                         UpdateKind::Passive => {
-                            if update_ready.get() {
-                                f(Event::Update {
+                            if update_ready.take() {
+                                callback(Event::Update {
                                     kind: UpdateKind::Passive,
                                 });
                                 if main_loop.is_quit_requested() {
                                     break 'main_loop;
                                 }
-                                update_ready.set(false);
                             }
 
                             self.flush()?;
@@ -177,7 +176,7 @@ impl<W: 'static + Clone> IContext for Context<W> {
                         },
 
                         UpdateKind::Active | UpdateKind::VBlank => {
-                            f(Event::Update {
+                            callback(Event::Update {
                                 kind: UpdateKind::Active,
                             });
                             continue 'main_loop;
@@ -186,7 +185,7 @@ impl<W: 'static + Clone> IContext for Context<W> {
                 }
                 if !xevent_ptr.is_null() {
                     let xevent = CBox::from_raw(xevent_ptr);
-                    self.handle_event(xevent, &mut f)?;
+                    self.handle_event(xevent, &f)?;
                 }
             }
         }

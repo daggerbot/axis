@@ -123,7 +123,7 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
 
         manager.borrow_mut().map.insert(xid, shared.clone());
 
-        let mut window = Window {
+        let window = Window {
             atoms: self.device.atoms().clone(),
             connection,
             shared,
@@ -291,7 +291,7 @@ impl<W: 'static + Clone> Drop for Window<W> {
 impl<W: 'static + Clone> IWindow for Window<W> {
     type Context = Context<W>;
 
-    fn destroy(&mut self) {
+    fn destroy(&self) {
         if let Some(xid) = self.shared.xid.take() {
             unsafe {
                 xcb_sys::xcb_destroy_window(self.xcb, xid);
@@ -318,7 +318,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         }
     }
 
-    fn set_pos(&mut self, pos: Vector2<Coord>) -> Result<()> {
+    fn set_pos(&self, pos: Vector2<Coord>) -> Result<()> {
         let xid = self.shared.try_xid()?;
         let x = math::clamp(pos.x, Coord::from(i16::MIN), Coord::from(i16::MAX)) as i16;
         let y = math::clamp(pos.y, Coord::from(i16::MIN), Coord::from(i16::MAX)) as i16;
@@ -335,7 +335,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         Ok(())
     }
 
-    fn set_size(&mut self, size: Vector2<Coord>) -> Result<()> {
+    fn set_size(&self, size: Vector2<Coord>) -> Result<()> {
         let xid = self.shared.try_xid()?;
         let width = math::clamp(size.x, 1, Coord::from(u16::MAX)) as u16;
         let height = math::clamp(size.y, 1, Coord::from(u16::MAX)) as u16;
@@ -352,7 +352,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         Ok(())
     }
 
-    fn set_title(&mut self, title: &str) -> Result<()> {
+    fn set_title(&self, title: &str) -> Result<()> {
         let bytes = title.as_bytes();
         self.set_property(xcb_sys::XCB_ATOM_WM_NAME, xcb_sys::XCB_ATOM_STRING, bytes)?;
         self.set_property(
@@ -365,7 +365,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         Ok(())
     }
 
-    fn set_visible(&mut self, visible: bool) -> Result<()> {
+    fn set_visible(&self, visible: bool) -> Result<()> {
         let xid = self.shared.try_xid()?;
 
         unsafe {

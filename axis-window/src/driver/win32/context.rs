@@ -69,17 +69,15 @@ impl<W: 'static + Clone> IContext for Context<W> {
         std::iter::once(Device::new(self))
     }
 
-    fn run<F: FnMut(Event<W>)>(&self, main_loop: &MainLoop, mut f: F) -> Result<()> {
+    fn run<F: Fn(Event<W>)>(&self, main_loop: &MainLoop, callback: F) -> Result<()> {
         main_loop.clear_quit_flag();
         let mut msg = unsafe { std::mem::zeroed() };
         let update_ready = Cell::new(true);
-        let mut f = |event| {
-            f(event);
+        let f = |event| {
+            (callback)(event);
             update_ready.set(true);
         };
-        let _event_handler = unsafe {
-            EventHandler::push(self.event_manager.as_ref(), &mut f);
-        };
+        let _event_handler = unsafe { EventHandler::push(self.event_manager.as_ref(), &f) };
 
         'main_loop: while !main_loop.is_quit_requested() {
             // Handle our own queued events before polling the Win32 message queue.
@@ -111,14 +109,13 @@ impl<W: 'static + Clone> IContext for Context<W> {
                 // Nothing immediately available. Wait or handle an update message.
                 match main_loop.update_kind() {
                     UpdateKind::Passive => {
-                        if update_ready.get() {
-                            (f)(Event::Update {
+                        if update_ready.take() {
+                            (callback)(Event::Update {
                                 kind: UpdateKind::Passive,
                             });
                             if main_loop.is_quit_requested() {
                                 break 'main_loop;
                             }
-                            update_ready.set(false);
                         }
 
                         match winapi::um::winuser::GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0)
@@ -133,7 +130,7 @@ impl<W: 'static + Clone> IContext for Context<W> {
                     },
 
                     UpdateKind::Active | UpdateKind::VBlank => {
-                        (f)(Event::Update {
+                        (callback)(Event::Update {
                             kind: UpdateKind::Active,
                         });
                     },

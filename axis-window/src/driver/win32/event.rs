@@ -21,31 +21,30 @@ use crate::Coord;
 /// Thunk type used by [`EventHandler`].
 #[derive(Clone, Copy)]
 struct EventThunk<W: 'static + Clone> {
-    f: unsafe fn(event: Event<W>, user_data: *mut c_void),
-    user_data: *mut c_void,
+    f: unsafe fn(event: Event<W>, user_data: *const c_void),
+    user_data: *const c_void,
 }
 
 impl<W: 'static + Clone> EventThunk<W> {
-    unsafe fn invoke(&mut self, event: Event<W>) {
+    unsafe fn invoke(&self, event: Event<W>) {
         (self.f)(event, self.user_data);
     }
 
-    fn new<F: FnMut(Event<W>)>(f: &F) -> EventThunk<W> {
+    fn new<F: Fn(Event<W>)>(f: &F) -> EventThunk<W> {
         EventThunk {
             f: EventThunk::thunk::<F>,
-            user_data: f as *const F as *const c_void as *mut c_void,
+            user_data: f as *const F as *const c_void,
         }
     }
 
-    unsafe fn thunk<F: FnMut(Event<W>)>(event: Event<W>, user_data: *mut c_void) {
-        let user_data = user_data as *mut F;
-        (*user_data)(event);
+    unsafe fn thunk<F: Fn(Event<W>)>(event: Event<W>, user_data: *const c_void) {
+        (*(user_data as *const F))(event);
     }
 }
 
 /// Handles incoming Win32 messages by either dispatching them to a Rust callback or queuing them.
 pub struct EventManager<W: 'static + Clone> {
-    callbacks: RefCell<Vec<Rc<RefCell<EventThunk<W>>>>>,
+    callbacks: RefCell<Vec<Rc<EventThunk<W>>>>,
     queue: RefCell<VecDeque<Event<W>>>,
 }
 
@@ -66,37 +65,34 @@ impl<W: 'static + Clone> EventManager<W> {
     pub unsafe fn push(&self, event: Event<W>) {
         match self.top_callback() {
             None => self.queue.borrow_mut().push_back(event),
-            Some(callback) => match callback.try_borrow_mut() {
-                Ok(mut callback) => callback.invoke(event),
-                Err(_) => self.queue.borrow_mut().push_back(event),
-            },
+            Some(callback) => callback.invoke(event),
         }
     }
 }
 
 impl<W: 'static + Clone> EventManager<W> {
-    fn top_callback(&self) -> Option<Rc<RefCell<EventThunk<W>>>> {
-        self.callbacks.borrow_mut().last().cloned()
+    fn top_callback(&self) -> Option<Rc<EventThunk<W>>> {
+        self.callbacks.borrow().last().cloned()
     }
 }
 
 /// Holds an item on an [`EventManager`]'s callback stack.
 pub struct EventHandler<'a, 'f, W: 'static + Clone> {
     event_manager: &'a EventManager<W>,
-    _phantom: PhantomData<&'f mut ()>,
+    _phantom: PhantomData<&'f ()>,
     top: usize,
 }
 
 impl<'a, 'f, W: 'static + Clone> EventHandler<'a, 'f, W> {
-    pub unsafe fn push<F: 'f + FnMut(Event<W>)>(
-        event_manager: &'a EventManager<W>, f: &'f mut F,
+    pub unsafe fn push<F: 'f + Fn(Event<W>)>(
+        event_manager: &'a EventManager<W>, f: &'f F,
     ) -> EventHandler<'a, 'f, W> {
         let top = event_manager.callbacks.borrow().len();
 
         event_manager
             .callbacks
             .borrow_mut()
-            .push(Rc::new(RefCell::new(EventThunk::new(f))));
+            .push(Rc::new(EventThunk::new(f)));
 
         EventHandler {
             event_manager,
@@ -106,8 +102,11 @@ impl<'a, 'f, W: 'static + Clone> EventHandler<'a, 'f, W> {
     }
 }
 
+pub fn here() {}
+
 impl<'a, 'f, W: 'static + Clone> Drop for EventHandler<'a, 'f, W> {
     fn drop(&mut self) {
+        here();
         let mut callbacks = self.event_manager.callbacks.borrow_mut();
         while callbacks.len() > self.top {
             callbacks.pop();
