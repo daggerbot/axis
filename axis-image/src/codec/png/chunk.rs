@@ -20,12 +20,19 @@ pub struct ChunkId {
 }
 
 impl ChunkId {
-    pub const IDAT: ChunkId = ChunkId::from_unchecked("IDAT");
-    pub const IEND: ChunkId = ChunkId::from_unchecked("IEND");
-    pub const IHDR: ChunkId = ChunkId::from_unchecked("IHDR");
-    pub const PLTE: ChunkId = ChunkId::from_unchecked("PLTE");
+    /// ID for the required chunk(s) containing the image's pixel data.
+    pub const IDAT: ChunkId = unsafe { ChunkId::from_unchecked("IDAT") };
+    /// ID for the required chunk at the end of any PNG stream.
+    pub const IEND: ChunkId = unsafe { ChunkId::from_unchecked("IEND") };
+    /// ID for the required chunk immediately following the file signature.
+    pub const IHDR: ChunkId = unsafe { ChunkId::from_unchecked("IHDR") };
+    /// ID for the chunk containing the palette, which is required if the image's color type is
+    /// indexed.
+    pub const PLTE: ChunkId = unsafe { ChunkId::from_unchecked("PLTE") };
+    /// ID for the chunk containing transparency data if the color space does not include an alpha
+    /// channel.
     #[allow(non_upper_case_globals)]
-    pub const tRNS: ChunkId = ChunkId::from_unchecked("tRNS");
+    pub const tRNS: ChunkId = unsafe { ChunkId::from_unchecked("tRNS") };
 
     /// Returns the chunk ID as a slice of bytes.
     pub fn as_bytes(&self) -> &[u8] {
@@ -39,12 +46,44 @@ impl ChunkId {
 
     /// Returns the chunk ID as a string.
     pub fn as_str(&self) -> &str {
-        std::str::from_utf8(&self.raw).unwrap()
+        // All valid chunk IDs are valid UTF-8. Invalid chunk IDs can only be acquired privately or
+        // by unsafe means, so this function can be considered safe.
+        unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
+    }
+
+    /// Returns true if the chunk is ancillary, as indicated by the first letter being lower-case.
+    /// An ancillary chunk is not required to properly display the image.
+    pub fn is_ancillary(self) -> bool {
+        char::from(self.raw[0]).is_lowercase()
+    }
+
+    /// Returns true if the chunk is critical, as indicated by the first letter being upper-case. A
+    /// critical chunk is required to properly display the image.
+    pub fn is_critical(self) -> bool {
+        char::from(self.raw[0]).is_uppercase()
+    }
+
+    /// Returns true if the chunk is privately specified, as indicated by the second letter being
+    /// lower-case.
+    pub fn is_private(self) -> bool {
+        char::from(self.raw[1]).is_lowercase()
+    }
+
+    /// Returns true if the chunk is publicly specified, as indicated by the second letter being
+    /// upper-case.
+    pub fn is_public(self) -> bool {
+        char::from(self.raw[1]).is_uppercase()
+    }
+
+    /// Returns true if the chunk is safe to copy as-is when it is not understood by a decoder or an
+    /// editor. This is indicated by the fourth letter being lower-case.
+    pub fn is_safe_to_copy(self) -> bool {
+        char::from(self.raw[3]).is_lowercase()
     }
 }
 
 impl ChunkId {
-    const fn from_unchecked(s: &str) -> ChunkId {
+    const unsafe fn from_unchecked(s: &str) -> ChunkId {
         let bytes = s.as_bytes();
         ChunkId {
             raw: [bytes[0], bytes[1], bytes[2], bytes[3]],

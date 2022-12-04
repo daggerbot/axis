@@ -23,7 +23,7 @@ mod predefined;
 mod rgb;
 
 pub use alpha::Alpha;
-pub use color::{Color, FromColor, FromColorLossy, IntoColor, IntoColorLossy};
+pub use color::{Color, FromColor, FromColorLossy, IntoColor, IntoColorLossy, WithAlpha};
 pub use component::{
     Component, FromComponent, FromComponentLossy, IntoComponent, IntoComponentLossy,
 };

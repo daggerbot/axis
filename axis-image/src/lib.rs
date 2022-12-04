@@ -28,6 +28,6 @@ mod vec_image;
 pub use bitmap::Bitmap;
 pub use generate::{blank, generate, solid, Generate};
 pub use image::{Image, ImageMut, OutOfBounds};
-pub use map::{Cloned, Convert, Copied, Map};
+pub use map::{Cloned, Convert, ConvertLossy, Copied, Map, To, WithMask, Zip};
 pub use subimage::{Subimage, SubimageMut};
 pub use vec_image::VecImage;

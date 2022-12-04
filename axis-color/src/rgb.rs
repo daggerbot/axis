@@ -8,7 +8,7 @@
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-use crate::color::{Color, FromColor, FromColorLossy};
+use crate::color::{Color, FromColor, FromColorLossy, WithAlpha};
 use crate::component::{Component, IntoComponent, IntoComponentLossy};
 use crate::lum::{Lum, LumAlpha};
 
@@ -294,6 +294,19 @@ impl<T, F: IntoComponentLossy<T>> FromColorLossy<Rgba<F>> for Rgb<T> {
 impl<T> Into<(T, T, T)> for Rgb<T> {
     fn into(self) -> (T, T, T) {
         (self.r, self.g, self.b)
+    }
+}
+
+impl<T> WithAlpha for Rgb<T> {
+    type Output = Rgba<T>;
+
+    fn with_alpha(self, a: T) -> Rgba<T> {
+        Rgba {
+            r: self.r,
+            g: self.g,
+            b: self.b,
+            a,
+        }
     }
 }
 

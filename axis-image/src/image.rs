@@ -11,11 +11,11 @@ use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-use color::IntoColorLossy;
+use color::{Color, IntoColor, IntoColorLossy, IntoComponent, WithAlpha};
 use math::{Rect, Vector2};
 
 use crate::bitmap::Bitmap;
-use crate::map::{Cloned, Convert, Copied, Map};
+use crate::map::{Cloned, Convert, ConvertLossy, Copied, Map, To, WithMask, Zip};
 use crate::subimage::Subimage;
 use crate::vec_image::VecImage;
 
@@ -36,12 +36,23 @@ pub trait Image: Sized {
         Cloned { parent: self }
     }
 
-    /// Returns an image that converts this image into another color type.
+    /// Returns an image that converts colors from this image into another type.
     fn convert<'a, T>(&'a self) -> Convert<'a, T, Self::Pixel<'a>, Self>
+    where
+        Self::Pixel<'a>: IntoColor<T>,
+    {
+        Convert {
+            parent: self,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Returns an image that lossily converts colors from this image into another type.
+    fn convert_lossy<'a, T>(&'a self) -> ConvertLossy<'a, T, Self::Pixel<'a>, Self>
     where
         Self::Pixel<'a>: IntoColorLossy<T>,
     {
-        Convert {
+        ConvertLossy {
             parent: self,
             _phantom: PhantomData,
         }
@@ -104,6 +115,17 @@ pub trait Image: Sized {
         }
     }
 
+    /// Returns an image that converts pixels from this image into another type.
+    fn to<'a, T>(&'a self) -> To<'a, T, Self::Pixel<'a>, Self>
+    where
+        Self::Pixel<'a>: Into<T>,
+    {
+        To {
+            parent: self,
+            _phantom: PhantomData,
+        }
+    }
+
     /// Renders the image's contents to a `Bitmap`.
     fn to_bitmap<'a>(&'a self) -> Bitmap
     where
@@ -128,9 +150,83 @@ pub trait Image: Sized {
         })
     }
 
+    /// Adds an alpha channel to the image. The image and mask must have the same size.
+    fn try_with_mask<'a, M: Image>(&'a self, mask: M) -> Result<WithMask<'a, Self, M>, OutOfBounds>
+    where
+        Self::Pixel<'a>: WithAlpha,
+        for<'b> M::Pixel<'b>: IntoComponent<<Self::Pixel<'a> as Color>::Component>,
+    {
+        if self.size() != mask.size() {
+            return Err(OutOfBounds);
+        }
+        Ok(WithMask { mask, parent: self })
+    }
+
+    /// Combines two images, resulting in one that yields tuples containing pixels from both images.
+    /// Both images must have the same size.
+    fn try_zip<'a, B: Image>(&'a self, b: B) -> Result<Zip<'a, Self, B>, OutOfBounds> {
+        if self.size() != b.size() {
+            return Err(OutOfBounds);
+        }
+        Ok(Zip(self, b))
+    }
+
     /// Returns the image's width in pixels.
     fn width(&self) -> usize {
         self.size().x
+    }
+
+    /// Adds an alpha channel to the image. The image and mask must have the same size.
+    ///
+    /// # Example
+    /// ```
+    /// use axis_color::{Rgb, Rgba};
+    /// use axis_image::{Bitmap, Image, VecImage};
+    /// use axis_math::Vector2;
+    ///
+    /// let size = Vector2::new(32, 32);
+    /// let image: VecImage<Rgb<u8>> = VecImage::new(size);
+    /// let mask = Bitmap::new(size);
+    /// let _masked_image: VecImage<Rgba<u8>> = image.with_mask(mask).to_vec_image();
+    /// ```
+    fn with_mask<'a, M: Image>(&'a self, mask: M) -> WithMask<'a, Self, M>
+    where
+        Self::Pixel<'a>: WithAlpha,
+        for<'b> M::Pixel<'b>: IntoComponent<<Self::Pixel<'a> as Color>::Component>,
+    {
+        self.try_with_mask(mask).unwrap()
+    }
+
+    fn zip<'a, B: Image>(&'a self, b: B) -> Zip<'a, Self, B> {
+        self.try_zip(b).unwrap()
+    }
+}
+
+impl<'a, T: Image> Image for &'a T {
+    type Pixel<'b> = T::Pixel<'b> where Self: 'b;
+
+    fn get_pixel<'b>(&'b self, pos: Vector2<usize>) -> T::Pixel<'b> {
+        (**self).get_pixel(pos)
+    }
+
+    unsafe fn get_pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> T::Pixel<'b> {
+        (**self).get_pixel_unchecked(pos)
+    }
+
+    fn height(&self) -> usize {
+        (**self).height()
+    }
+
+    fn size(&self) -> Vector2<usize> {
+        (**self).size()
+    }
+
+    fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<T::Pixel<'b>, OutOfBounds> {
+        (**self).try_get_pixel(pos)
+    }
+
+    fn width(&self) -> usize {
+        (**self).width()
     }
 }
 

@@ -35,6 +35,22 @@ impl<T> VecImage<T> {
         self.buf
     }
 
+    /// Returns a new image with all pixels initializes to the default value for `T`.
+    pub fn new(size: Vector2<usize>) -> VecImage<T>
+    where
+        T: Default,
+    {
+        crate::generate::blank(size).to_vec_image()
+    }
+
+    /// Returns a new image with all pixels initialized to the specified value.
+    pub fn new_solid(size: Vector2<usize>, pixel: &T) -> VecImage<T>
+    where
+        T: Clone,
+    {
+        crate::generate::solid(size, pixel).to_vec_image()
+    }
+
     /// Gets a reference to the specified row.
     pub fn row(&self, y: usize) -> &[T] {
         self.try_row(y).unwrap()
@@ -90,7 +106,8 @@ impl<T> VecImage<T> {
     }
 }
 
-impl<'a, T, I: ?Sized + Image<Pixel<'a> = T>> From<&'a I> for VecImage<T> {
+impl<'a, T, U: 'a + Into<T>, I: ?Sized + Image<Pixel<'a> = U>> From<&'a I> for VecImage<T> {
+    /// Renders the source image as a `[VecImage]`.
     fn from(source: &'a I) -> VecImage<T> {
         let mut image = VecImage {
             buf: Vec::new(),
@@ -102,7 +119,7 @@ impl<'a, T, I: ?Sized + Image<Pixel<'a> = T>> From<&'a I> for VecImage<T> {
 
         for y in 0..image.size.y {
             for x in 0..image.size.x {
-                image.buf.push(source.get_pixel((x, y).into()));
+                image.buf.push(source.get_pixel(Vector2::new(x, y)).into());
             }
         }
 

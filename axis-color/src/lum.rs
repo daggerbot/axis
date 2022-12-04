@@ -8,7 +8,7 @@
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-use crate::color::{Color, FromColor, FromColorLossy};
+use crate::color::{Color, FromColor, FromColorLossy, WithAlpha};
 use crate::component::{IntoComponent, IntoComponentLossy};
 
 /// Luminance color type.
@@ -43,6 +43,14 @@ where
         Lum {
             l: other.into_component_lossy(),
         }
+    }
+}
+
+impl<T> WithAlpha for Lum<T> {
+    type Output = LumAlpha<T>;
+
+    fn with_alpha(self, a: T) -> LumAlpha<T> {
+        LumAlpha { l: self.l, a }
     }
 }
 
