@@ -64,7 +64,6 @@ fn main() {
     std::fs::create_dir_all(&out_dir).expect("can't create output directory");
     image
         .encode_png()
-        .with_interlace_method(Some(image::codec::png::InterlaceMethod::Adam7))
         .write_file(&out_path)
         .expect("write failed");
 }
