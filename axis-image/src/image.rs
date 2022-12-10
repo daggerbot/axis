@@ -71,7 +71,7 @@ pub trait Image: Sized {
     #[cfg(feature = "png")]
     fn encode_png<'i, 'p>(&'i self) -> crate::codec::png::Encoder<'i, 'p, Self>
     where
-        Self::Pixel<'i>: crate::codec::png::Pixel,
+        Self::Pixel<'i>: crate::codec::png::EncodePixel,
     {
         crate::codec::png::Encoder::new(self)
     }

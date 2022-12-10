@@ -14,6 +14,8 @@ extern crate byteorder;
 extern crate crc32fast;
 #[cfg(feature = "flate2")]
 extern crate flate2;
+#[cfg(feature = "peekread")]
+extern crate peekread;
 
 /// Support for image codecs as optional cargo features.
 pub mod codec;
@@ -21,6 +23,8 @@ pub mod codec;
 mod bitmap;
 mod generate;
 mod image;
+#[allow(dead_code)]
+mod io;
 mod map;
 mod subimage;
 mod vec_image;

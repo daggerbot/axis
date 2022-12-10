@@ -6,10 +6,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use math::{DivCeil, Saturate, TrySub, Vector2};
+
+use crate::codec::png::Error;
 
 /// Enumeration of PNG interlace methods.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -28,11 +29,11 @@ impl InterlaceMethod {
     }
 
     /// Gets the interlace method with the specified byte value.
-    pub fn from_byte(byte: u8) -> Result<Option<InterlaceMethod>, InvalidInterlaceMethod> {
-        match byte {
+    pub fn from_byte(raw: u8) -> Result<Option<InterlaceMethod>, Error> {
+        match raw {
             0 => Ok(None),
             1 => Ok(Some(InterlaceMethod::Adam7)),
-            _ => Err(InvalidInterlaceMethod(byte)),
+            _ => Err(Error::InterlaceMethod { raw }),
         }
     }
 }
@@ -48,26 +49,6 @@ impl InterlaceMethod {
 impl Display for InterlaceMethod {
     fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
         fmt.write_str(self.description())
-    }
-}
-
-/// Raised when an invalid PNG interlace method is encountered.
-#[derive(Clone, Copy, Debug)]
-pub struct InvalidInterlaceMethod(pub u8);
-
-impl InvalidInterlaceMethod {
-    const DESCRIPTION: &'static str = "invalid png interlace method";
-}
-
-impl Display for InvalidInterlaceMethod {
-    fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
-        write!(fmt, "{}: {}", Self::DESCRIPTION, self.0)
-    }
-}
-
-impl Error for InvalidInterlaceMethod {
-    fn description(&self) -> &str {
-        Self::DESCRIPTION
     }
 }
 

@@ -6,12 +6,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::io::Write;
+use std::io::{Read, Write};
 
-use byteorder::{WriteBytesExt, BE};
+use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt, BE};
 use crc32fast::Hasher;
+use peekread::PeekRead;
+
+use crate::codec::png::Error;
+use crate::io::ReadExt;
 
 /// PNG chunk ID.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -128,19 +131,19 @@ impl Into<String> for ChunkId {
 }
 
 impl<'a> TryFrom<[u8; 4]> for ChunkId {
-    type Error = InvalidChunkId;
+    type Error = Error;
 
-    fn try_from(array: [u8; 4]) -> Result<ChunkId, InvalidChunkId> {
+    fn try_from(array: [u8; 4]) -> Result<ChunkId, Error> {
         ChunkId::try_from(&array[..])
     }
 }
 
 impl<'a> TryFrom<&'a [u8]> for ChunkId {
-    type Error = InvalidChunkId;
+    type Error = Error;
 
-    fn try_from(bytes: &'a [u8]) -> Result<ChunkId, InvalidChunkId> {
+    fn try_from(bytes: &'a [u8]) -> Result<ChunkId, Error> {
         if bytes.len() != 4 {
-            return Err(InvalidChunkId::Length(bytes.len()));
+            return Err(Error::ChunkIdLen { len: bytes.len() });
         }
         let mut raw = [0; 4];
         for i in 0..4 {
@@ -149,7 +152,7 @@ impl<'a> TryFrom<&'a [u8]> for ChunkId {
         for i in 0..4 {
             match raw[i] {
                 b'A'..=b'Z' | b'a'..=b'z' => (),
-                _ => return Err(InvalidChunkId::Bytes(raw)),
+                _ => return Err(Error::ChunkId { bytes: raw }),
             }
         }
         Ok(ChunkId { raw })
@@ -157,46 +160,160 @@ impl<'a> TryFrom<&'a [u8]> for ChunkId {
 }
 
 impl<'a> TryFrom<&'a str> for ChunkId {
-    type Error = InvalidChunkId;
+    type Error = Error;
 
-    fn try_from(s: &'a str) -> Result<ChunkId, InvalidChunkId> {
+    fn try_from(s: &'a str) -> Result<ChunkId, Error> {
         ChunkId::try_from(s.as_bytes())
     }
 }
 
-/// Raised when an invalid PNG chunk ID is encountered.
-#[derive(Clone, Copy, Debug)]
-pub enum InvalidChunkId {
-    Bytes([u8; 4]),
-    Length(usize),
+/// Reads PNG chunks.
+pub struct ChunkReader<R: Read> {
+    chunk_id: ChunkId,
+    crc: Hasher,
+    inner: R,
+    len: u32,
+    pos: u32,
 }
 
-impl InvalidChunkId {
-    const DESCRIPTION: &'static str = "invalid png chunk id";
-}
+impl<R: Read> ChunkReader<R> {
+    /// Returns the chunk ID.
+    pub fn chunk_id(&self) -> ChunkId {
+        self.chunk_id
+    }
 
-impl Display for InvalidChunkId {
-    fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
-        match *self {
-            InvalidChunkId::Bytes(bytes) => write!(
-                fmt,
-                "{}: {:02x} {:02x} {:02x} {:02x}",
-                Self::DESCRIPTION,
-                bytes[0],
-                bytes[1],
-                bytes[2],
-                bytes[3]
-            ),
-            InvalidChunkId::Length(len) => {
-                write!(fmt, "{}: invalid length: {}", Self::DESCRIPTION, len)
-            },
-        }
+    /// Returns the length of the entire chunk, including bytes that have already been read.
+    pub fn chunk_len(&self) -> u32 {
+        self.len
+    }
+
+    /// Returns true if the end of the chunk has been reached.
+    pub fn eof(&self) -> bool {
+        self.pos == self.len
+    }
+
+    /// Reads to the end of the chunk, checks the CRC, and returns the inner reader.
+    pub fn finish(mut self) -> Result<R, Error> {
+        self.check_crc()?;
+        Ok(self.inner)
+    }
+
+    /// Begins reading a chunk.
+    pub fn new(mut inner: R) -> Result<ChunkReader<R>, Error> {
+        let len = inner.read_u32::<BE>()?;
+        let mut chunk_id_bytes = [0; 4];
+        inner.read_exact(&mut chunk_id_bytes[..])?;
+        let chunk_id = ChunkId::try_from(chunk_id_bytes)?;
+
+        Ok(ChunkReader {
+            chunk_id,
+            crc: init_crc(chunk_id),
+            inner,
+            len,
+            pos: 0,
+        })
+    }
+
+    /// Returns the number of bytes remaining to be read.
+    pub fn remaining(&self) -> u32 {
+        self.len - self.pos
     }
 }
 
-impl Error for InvalidChunkId {
-    fn description(&self) -> &str {
-        Self::DESCRIPTION
+impl<R: Read> ChunkReader<R> {
+    fn check_crc(&mut self) -> Result<(), Error> {
+        self.skip_to_end()?;
+        let crc = self.inner.read_u32::<BE>()?;
+        if self.crc.clone().finalize() != crc {
+            return Err(Error::Crc);
+        }
+        Ok(())
+    }
+}
+
+impl<R: Read> Read for ChunkReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let len = std::cmp::min(
+            buf.len(),
+            usize::try_from(self.remaining()).unwrap_or(usize::MAX),
+        );
+        if len == 0 {
+            return Ok(0);
+        }
+        let n_read = self.inner.read(buf)?;
+        if n_read == 0 {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
+        assert!(n_read <= len);
+        self.crc.update(&buf[..n_read]);
+        self.pos += n_read as u32;
+        Ok(n_read)
+    }
+}
+
+/// Reads consecutive chunks with the same ID as a single stream.
+pub struct ProgressiveChunkReader<R: PeekRead> {
+    chunk: ChunkReader<R>,
+}
+
+impl<R: PeekRead> ProgressiveChunkReader<R> {
+    /// Returns the chunk ID.
+    pub fn chunk_id(&self) -> ChunkId {
+        self.chunk.chunk_id
+    }
+
+    pub fn new(chunk: ChunkReader<R>) -> ProgressiveChunkReader<R> {
+        ProgressiveChunkReader { chunk }
+    }
+
+    /// Finishes reading the multi-chunk stream and returns the inner peekable reader.
+    pub fn finish(mut self) -> Result<R, Error> {
+        self.skip_to_end()?;
+        Ok(self.chunk.inner)
+    }
+}
+
+impl<R: PeekRead> Read for ProgressiveChunkReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+
+        loop {
+            let n_read = self.chunk.read(buf)?;
+            if n_read != 0 {
+                return Ok(n_read);
+            }
+
+            // We've reached the end of the chunk. Check if the next chunk has the same ID.
+            match self.chunk.check_crc() {
+                Ok(()) => (),
+                Err(Error::Crc) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        Error::Crc,
+                    ))
+                },
+                Err(err) => return Err(std::io::Error::new(std::io::ErrorKind::Other, err)),
+            };
+            let mut chunk_header = [0; 8];
+            self.chunk.inner.peek().read_exact(&mut chunk_header[..])?;
+            let chunk_id = match ChunkId::try_from(&chunk_header[4..8]) {
+                Ok(chunk_id) => chunk_id,
+                Err(_) => {
+                    return Ok(0);
+                },
+            };
+            if chunk_id != self.chunk.chunk_id {
+                return Ok(0);
+            }
+
+            // We've confirmed that the next chunk has the same ID. Let's start reading from that
+            // chunk now.
+            self.chunk.crc = init_crc(chunk_id);
+            self.chunk.len = <BE as ByteOrder>::read_u32(&chunk_header[..4]);
+            self.chunk.pos = 0;
+        }
     }
 }
 

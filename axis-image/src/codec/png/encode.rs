@@ -6,35 +6,28 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
-use byteorder::{WriteBytesExt, BE};
-use color::Rgb;
-use math::{TryFromComposite, Vector2};
+use byteorder::{ByteOrder, WriteBytesExt, BE};
+use color::{IntoComponentLossy, Lum, LumAlpha, Rgb, Rgba};
+use math::{IntoLossy, TryFromComposite, Vector2};
 
-use crate::codec::png::compress::Compressor;
-use crate::codec::png::filter::BaseFilterer;
-use crate::codec::png::interlace::{Interlacer, InterlacerItem};
-use crate::codec::png::pixel::PixelPacker;
-use crate::codec::png::{
-    ChunkId, ChunkWriter, ColorType, CompressionMethod, FilterMethod, Header, InterlaceMethod,
-    InvalidBitDepth, Pixel,
-};
+use crate::codec::png::chunk::{ChunkId, ChunkWriter};
+use crate::codec::png::compress::{CompressionMethod, Compressor};
+use crate::codec::png::filter::{FilterMethod, Filterer};
+use crate::codec::png::interlace::{InterlaceMethod, Interlacer, InterlacerItem};
+use crate::codec::png::{self, ColorType, Error, Header, Pixel, PixelComponent};
 use crate::image::Image;
 
-const MAX_DIMENSION: u32 = 0x7fff_ffff;
 const MAX_IDAT_SIZE: usize = 64 * 1024;
-const MAX_PALETTE_LEN: usize = 256;
 
 /// PNG image encoder.
 pub struct Encoder<'i, 'p, I>
 where
     I: 'i + Image,
-    I::Pixel<'i>: 'i + Pixel,
+    I::Pixel<'i>: 'i + EncodePixel,
 {
     bit_depth: u8,
     compression_method: CompressionMethod,
@@ -47,7 +40,7 @@ where
 impl<'i, 'p, I> Encoder<'i, 'p, I>
 where
     I: 'i + Image,
-    I::Pixel<'i>: 'i + Pixel,
+    I::Pixel<'i>: 'i + EncodePixel,
 {
     /// Constructs an encoder for the specified image.
     pub fn new(image: &'i I) -> Self {
@@ -62,7 +55,7 @@ where
     }
 
     /// Changes the encoder's bit depth.
-    pub fn with_bit_depth(&mut self, bit_depth: u8) -> Result<&mut Self, EncoderError> {
+    pub fn with_bit_depth(&mut self, bit_depth: u8) -> Result<&mut Self, Error> {
         <I::Pixel<'i> as Pixel>::COLOR_TYPE.check_bit_depth(bit_depth)?;
         self.bit_depth = bit_depth;
         Ok(self)
@@ -77,25 +70,23 @@ where
     }
 
     /// Changes the encoder's palette. This is ignored if the color type is not indexed.
-    pub fn with_palette(&mut self, palette: &'p [Rgb<u8>]) -> Result<&mut Self, EncoderError> {
-        if palette.is_empty() || palette.len() > MAX_PALETTE_LEN {
-            return Err(EncoderError::InvalidPaletteLen {
-                palette_len: palette.len(),
-            });
+    pub fn with_palette(&mut self, palette: &'p [Rgb<u8>]) -> Result<&mut Self, Error> {
+        if palette.is_empty() || palette.len() > png::MAX_PALETTE_LEN {
+            return Err(Error::PaletteLen { len: palette.len() });
         }
         self.palette = Some(palette);
         Ok(self)
     }
 
     /// Encodes the image as a PNG stream.
-    pub fn write<W: Write>(&self, w: &mut W) -> Result<(), EncoderError> {
+    pub fn write<W: Write>(&self, w: &mut W) -> Result<(), Error> {
         let header = Header::for_image(self.image);
         write_signature(w)?;
         write_IHDR(w, &header)?;
 
         if <I::Pixel<'i> as Pixel>::COLOR_TYPE == ColorType::Index {
             match self.palette {
-                None => return Err(EncoderError::MissingPalette),
+                None => return Err(Error::MissingPalette),
                 Some(palette) => write_PLTE(w, palette)?,
             }
         }
@@ -113,7 +104,7 @@ where
     }
 
     /// Encodes the image as a PNG file.
-    pub fn write_file<P: AsRef<Path>>(&self, path: P) -> Result<(), EncoderError> {
+    pub fn write_file<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
         let mut writer = BufWriter::new(File::create(path)?);
         self.write(&mut writer)?;
         writer.flush()?;
@@ -121,61 +112,155 @@ where
     }
 }
 
-/// PNG encoder error type.
-#[derive(Debug)]
-pub enum EncoderError {
-    InvalidBitDepth { source: InvalidBitDepth },
-    InvalidImageSize { image_size: Vector2<usize> },
-    InvalidPaletteLen { palette_len: usize },
-    IoError { source: std::io::Error },
-    MissingPalette,
+/// Trait for encoding pixels as `u8`/`u16` sequences.
+pub trait EncodePixel: Pixel {
+    fn encode_pixel<E>(self, buf: &mut [E])
+    where
+        Self::Component: IntoComponentLossy<E> + IntoLossy<E>;
 }
 
-impl Display for EncoderError {
-    fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
-        match *self {
-            EncoderError::InvalidBitDepth { source } => {
-                write!(fmt, "{}", source)
+impl EncodePixel for u8 {
+    fn encode_pixel<E>(self, buf: &mut [E])
+    where
+        Self::Component: IntoComponentLossy<E> + IntoLossy<E>,
+    {
+        buf[0] = self.into_lossy();
+    }
+}
+
+impl<T: PixelComponent> EncodePixel for Lum<T> {
+    fn encode_pixel<E>(self, buf: &mut [E])
+    where
+        Self::Component: IntoComponentLossy<E> + IntoLossy<E>,
+    {
+        buf[0] = self.l.into_component_lossy();
+    }
+}
+
+impl<T: PixelComponent> EncodePixel for LumAlpha<T> {
+    fn encode_pixel<E>(self, buf: &mut [E])
+    where
+        Self::Component: IntoComponentLossy<E> + IntoLossy<E>,
+    {
+        buf[0] = self.l.into_component_lossy();
+        buf[1] = self.a.into_component_lossy();
+    }
+}
+
+impl<T: PixelComponent> EncodePixel for Rgb<T> {
+    fn encode_pixel<E>(self, buf: &mut [E])
+    where
+        Self::Component: IntoComponentLossy<E> + IntoLossy<E>,
+    {
+        buf[0] = self.r.into_component_lossy();
+        buf[1] = self.g.into_component_lossy();
+        buf[2] = self.b.into_component_lossy();
+    }
+}
+
+impl<T: PixelComponent> EncodePixel for Rgba<T> {
+    fn encode_pixel<E>(self, buf: &mut [E])
+    where
+        Self::Component: IntoComponentLossy<E> + IntoLossy<E>,
+    {
+        buf[0] = self.r.into_component_lossy();
+        buf[1] = self.g.into_component_lossy();
+        buf[2] = self.b.into_component_lossy();
+        buf[3] = self.a.into_component_lossy();
+    }
+}
+
+impl<'a, T: EncodePixel> EncodePixel for &'a T {
+    fn encode_pixel<E>(self, buf: &mut [E])
+    where
+        Self::Component: IntoComponentLossy<E> + IntoLossy<E>,
+    {
+        (*self).encode_pixel(buf)
+    }
+}
+
+/// Packs pixels into bytes.
+struct PixelPacker<W: Write> {
+    bit_depth: u8,
+    byte: u8,
+    inner: W,
+    mask: u8,
+    pos: u8,
+}
+
+impl<W: Write> PixelPacker<W> {
+    fn finish(mut self) -> std::io::Result<W> {
+        self.pad()?;
+        Ok(self.inner)
+    }
+
+    fn new(inner: W, bit_depth: u8) -> PixelPacker<W> {
+        PixelPacker {
+            bit_depth: match bit_depth {
+                1 | 2 | 4 | 8 | 16 => bit_depth,
+                _ => unreachable!(),
             },
-            EncoderError::InvalidImageSize { image_size } => {
-                write!(fmt, "invalid image size: {}x{}", image_size.x, image_size.y)
-            },
-            EncoderError::InvalidPaletteLen { palette_len } => {
-                write!(fmt, "invalid palette length: {}", palette_len)
-            },
-            EncoderError::IoError { ref source } => {
-                write!(fmt, "{}", source)
-            },
-            EncoderError::MissingPalette => fmt.write_str("missing palette"),
+            byte: 0,
+            inner,
+            mask: ((1u32 << bit_depth) - 1) as u8,
+            pos: 0,
         }
     }
-}
 
-impl Error for EncoderError {
-    fn source(&self) -> Option<&(dyn 'static + Error)> {
-        match *self {
-            EncoderError::InvalidBitDepth { ref source } => Some(source),
-            EncoderError::IoError { ref source } => Some(source),
-            _ => None,
+    fn pack<P: EncodePixel>(&mut self, pixel: P) -> std::io::Result<()> {
+        match self.bit_depth {
+            1 | 2 | 4 => {
+                let mut bytes = [0u8; 1];
+                pixel.encode_pixel(&mut bytes);
+                self.byte |= (bytes[0] & self.mask) << (8 - self.bit_depth - self.pos);
+                self.pos += self.bit_depth;
+                if self.pos == 8 {
+                    let byte = self.byte;
+                    self.byte = 0;
+                    self.pos = 0;
+                    self.inner.write_u8(byte)?;
+                }
+                Ok(())
+            },
+
+            8 => {
+                let mut bytes = [0u8; 4];
+                pixel.encode_pixel(&mut bytes);
+                self.inner
+                    .write_all(&bytes[..P::COLOR_TYPE.channel_count()])
+            },
+
+            16 => {
+                let mut words = [0u16; 4];
+                let mut bytes = [0u8; 8];
+                pixel.encode_pixel(&mut words);
+                for i in 0..P::COLOR_TYPE.channel_count() {
+                    <BE as ByteOrder>::write_u16(&mut bytes[(i * 2)..], words[i]);
+                }
+                self.inner
+                    .write_all(&bytes[..(P::COLOR_TYPE.channel_count() * 2)])
+            },
+
+            _ => unreachable!(),
         }
     }
-}
 
-impl From<std::io::Error> for EncoderError {
-    fn from(source: std::io::Error) -> EncoderError {
-        EncoderError::IoError { source }
-    }
-}
-
-impl From<InvalidBitDepth> for EncoderError {
-    fn from(source: InvalidBitDepth) -> EncoderError {
-        EncoderError::InvalidBitDepth { source }
+    /// Fills the rest of the current byte with zero if any pixel components have been packed into
+    /// it.
+    fn pad(&mut self) -> std::io::Result<()> {
+        if self.pos != 0 {
+            let byte = self.byte;
+            self.byte = 0;
+            self.pos = 0;
+            self.inner.write_u8(byte)?;
+        }
+        Ok(())
     }
 }
 
 /// Writes the PNG `IEND` chunk.
 #[allow(non_snake_case)]
-pub fn write_IEND<W: Write>(w: &mut W) -> Result<(), EncoderError> {
+pub fn write_IEND<W: Write>(w: &mut W) -> Result<(), Error> {
     ChunkWriter::new(w, ChunkId::IEND).finish()?;
     Ok(())
 }
@@ -184,16 +269,17 @@ pub fn write_IEND<W: Write>(w: &mut W) -> Result<(), EncoderError> {
 #[allow(non_snake_case)]
 pub fn write_IDAT<'a, W, I>(
     w: &mut W, image: &'a I, bit_depth: u8, compression_method: CompressionMethod,
-    _filter_method: FilterMethod, interlace_method: Option<InterlaceMethod>,
-) -> Result<(), EncoderError>
+    filter_method: FilterMethod, interlace_method: Option<InterlaceMethod>,
+) -> Result<(), Error>
 where
     W: Write,
     I: Image,
-    I::Pixel<'a>: Pixel,
+    I::Pixel<'a>: EncodePixel,
 {
     let chunk = ChunkWriter::new_progressive(w, ChunkId::IDAT, MAX_IDAT_SIZE);
     let mut compress = Compressor::new(chunk, compression_method);
-    let mut filter = BaseFilterer::new(
+    let mut filter = Filterer::new(
+        filter_method,
         compress,
         image.size(),
         bit_depth,
@@ -204,8 +290,9 @@ where
     for item in Interlacer::new(image.size(), interlace_method) {
         match item {
             InterlacerItem::BeginPass { size } => {
-                compress = packer.finish()?.finish();
-                filter = BaseFilterer::new(
+                compress = packer.finish()?.into_inner();
+                filter = Filterer::new(
+                    filter_method,
                     compress,
                     size,
                     bit_depth,
@@ -219,24 +306,24 @@ where
         }
     }
 
-    packer.finish()?.finish().finish()?.finish()?;
+    packer.finish()?.into_inner().finish()?.finish()?;
     Ok(())
 }
 
 /// Writes the PNG `IHDR` header chunk.
 #[allow(non_snake_case)]
-pub fn write_IHDR<W: Write>(w: &mut W, header: &Header) -> Result<(), EncoderError> {
+pub fn write_IHDR<W: Write>(w: &mut W, header: &Header) -> Result<(), Error> {
     let size: Vector2<u32> = match TryFromComposite::try_from_composite(header.image_size) {
         Ok(size) => size,
         Err(_) => {
-            return Err(EncoderError::InvalidImageSize {
-                image_size: header.image_size,
+            return Err(Error::ImageSize {
+                size: header.image_size,
             })
         },
     };
-    if size.x == 0 || size.x > MAX_DIMENSION || size.y == 0 || size.y > MAX_DIMENSION {
-        return Err(EncoderError::InvalidImageSize {
-            image_size: header.image_size,
+    if size.x == 0 || size.x > png::MAX_DIMENSION || size.y == 0 || size.y > png::MAX_DIMENSION {
+        return Err(Error::ImageSize {
+            size: header.image_size,
         });
     }
     header.color_type.check_bit_depth(header.bit_depth)?;
@@ -255,11 +342,9 @@ pub fn write_IHDR<W: Write>(w: &mut W, header: &Header) -> Result<(), EncoderErr
 
 /// Writes the PNG `PLTE` palette chunk.
 #[allow(non_snake_case)]
-pub fn write_PLTE<W: Write>(w: &mut W, palette: &[Rgb<u8>]) -> Result<(), EncoderError> {
-    if palette.is_empty() || palette.len() > MAX_PALETTE_LEN {
-        return Err(EncoderError::InvalidPaletteLen {
-            palette_len: palette.len(),
-        });
+pub fn write_PLTE<W: Write>(w: &mut W, palette: &[Rgb<u8>]) -> Result<(), Error> {
+    if palette.is_empty() || palette.len() > png::MAX_PALETTE_LEN {
+        return Err(Error::PaletteLen { len: palette.len() });
     }
 
     let mut chunk = ChunkWriter::new(w, ChunkId::PLTE);
@@ -272,7 +357,7 @@ pub fn write_PLTE<W: Write>(w: &mut W, palette: &[Rgb<u8>]) -> Result<(), Encode
 }
 
 /// Writes the PNG file signature.
-pub fn write_signature<W: Write>(w: &mut W) -> Result<(), EncoderError> {
+pub fn write_signature<W: Write>(w: &mut W) -> Result<(), Error> {
     w.write_all(&crate::codec::PNG_SIGNATURE[..])?;
     Ok(())
 }

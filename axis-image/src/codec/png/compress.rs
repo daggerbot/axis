@@ -6,11 +6,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::io::Write;
+use std::io::{Read, Write};
 
+use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
+
+use crate::codec::png::Error;
 
 /// Enumeration of PNG compression methods.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -34,33 +36,13 @@ impl Display for CompressionMethod {
 }
 
 impl TryFrom<u8> for CompressionMethod {
-    type Error = InvalidCompressionMethod;
+    type Error = Error;
 
-    fn try_from(byte: u8) -> Result<CompressionMethod, InvalidCompressionMethod> {
-        match byte {
+    fn try_from(raw: u8) -> Result<CompressionMethod, Error> {
+        match raw {
             0 => Ok(CompressionMethod::Zlib),
-            _ => Err(InvalidCompressionMethod(byte)),
+            _ => Err(Error::CompressionMethod { raw }),
         }
-    }
-}
-
-/// Raised when an invalid PNG compression method is encountered.
-#[derive(Clone, Copy, Debug)]
-pub struct InvalidCompressionMethod(pub u8);
-
-impl InvalidCompressionMethod {
-    const DESCRIPTION: &'static str = "invalid png compression method";
-}
-
-impl Display for InvalidCompressionMethod {
-    fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
-        write!(fmt, "{}: {}", Self::DESCRIPTION, self.0)
-    }
-}
-
-impl Error for InvalidCompressionMethod {
-    fn description(&self) -> &str {
-        Self::DESCRIPTION
     }
 }
 
@@ -98,6 +80,34 @@ impl<W: Write> Write for Compressor<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match *self {
             Compressor::Zlib(ref mut inner) => inner.write(buf),
+        }
+    }
+}
+
+/// Stream wrapper for decompressing data.
+pub enum Decompressor<R: Read> {
+    Zlib(ZlibDecoder<R>),
+}
+
+impl<R: Read> Decompressor<R> {
+    pub fn into_inner(self) -> R {
+        match self {
+            Decompressor::Zlib(r) => r.into_inner(),
+        }
+    }
+
+    /// Constructs a decompressor with the specified compression method.
+    pub fn new(inner: R, compression_method: CompressionMethod) -> Decompressor<R> {
+        match compression_method {
+            CompressionMethod::Zlib => Decompressor::Zlib(ZlibDecoder::new(inner)),
+        }
+    }
+}
+
+impl<R: Read> Read for Decompressor<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match *self {
+            Decompressor::Zlib(ref mut r) => r.read(buf),
         }
     }
 }
