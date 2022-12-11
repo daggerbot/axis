@@ -13,6 +13,7 @@ flate2 = {version = "1.0.24", optional = true}
 peekread = {version = "0.1.1", optional = true}
 
 [features]
+all = ["png"]
 png = ["byteorder", "crc32fast", "flate2", "peekread"]
 
 [[example]]

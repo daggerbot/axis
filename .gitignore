@@ -3,4 +3,5 @@ Cargo.lock
 output/
 target/
 
+!.github/
 !.gitignore

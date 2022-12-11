@@ -1,9 +1,12 @@
 [package]
-name = "axis-color"
-version = "1.0.0-main"
 edition = "2021"
 license = "MPL-2.0"
+name = "axis-color"
+version = "1.0.0-main"
 
 [dependencies]
-axis-math = { path = "../axis-math" }
-serde = { version = "1.0.147", features = ["derive"], optional = true }
+axis-math = {path = "../axis-math"}
+serde = {version = "1.0.147", features = ["derive"], optional = true}
+
+[features]
+all = ["serde"]

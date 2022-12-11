@@ -1,12 +1,13 @@
 [package]
-name = "axis-math"
-version = "1.0.0-main"
 edition = "2021"
 license = "MPL-2.0"
+name = "axis-math"
+version = "1.0.0-main"
 
 [dependencies]
-serde = { version = "1.0.147", features = ["derive"], optional = true }
+serde = {version = "1.0.147", features = ["derive"], optional = true}
 
 [features]
+all = ["serde", "std"]
 default = ["std"]
 std = []

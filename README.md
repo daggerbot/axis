@@ -1,5 +1,6 @@
 # axis - collection of math and multimedia libraries for Rust
 
+[![Github Workflow](https://github.com/daggerbot/axis/actions/workflows/rust.yml/badge.svg)](https://github.com/daggerbot/axis/actions)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
 Axis can be described as something like SDL (Simple DirectMedia Layer) written in pure Rust and for use in Rust.
