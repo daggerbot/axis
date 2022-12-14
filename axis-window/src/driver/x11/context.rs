@@ -104,7 +104,7 @@ impl<W: 'static + Clone> Context<W> {
         #[cfg(feature = "x11-sys")]
         unsafe {
             x11_sys::XSetEventQueueOwner(
-                connection.xlib,
+                connection.xlib_display_ptr(),
                 x11_sys::XEventQueueOwner_XCBOwnsEventQueue,
             );
         }
