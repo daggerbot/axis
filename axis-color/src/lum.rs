@@ -11,7 +11,7 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 use crate::color::{Color, FromColor, FromColorLossy, WithAlpha};
 use crate::component::{IntoComponent, IntoComponentLossy};
 
-/// Luminance color type.
+/// Luminance (grayscale) color type.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(transparent)]
@@ -24,6 +24,7 @@ impl<T> Color for Lum<T> {
     const NUM_COMPONENTS: usize = 1;
 }
 
+/// Converts a boolean value representing black (false) or white (true) into a luminance value.
 impl<T> FromColor<bool> for Lum<T>
 where
     bool: IntoComponent<T>,
@@ -35,6 +36,7 @@ where
     }
 }
 
+/// Converts a boolean value representing black (false) or white (true) into a luminance value.
 impl<T> FromColorLossy<bool> for Lum<T>
 where
     bool: IntoComponentLossy<T>,
@@ -68,7 +70,11 @@ impl_scalar_assign_ops! {
     impl SubAssign::sub_assign for Lum(l);
 }
 
-/// Luminance-alpha color type.
+//--------------------------------------------------------------------------------------------------
+
+/// Luminance-alpha color type. This is a niche color type but is provided because it is one of the
+/// five main color types defined by the PNG (Portable Network Graphics) specification. It is also
+/// used in old versions of OpenGL.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct LumAlpha<T> {
@@ -80,6 +86,8 @@ impl<T> Color for LumAlpha<T> {
     type Component = T;
     const NUM_COMPONENTS: usize = 2;
 }
+
+//--------------------------------------------------------------------------------------------------
 
 macro_rules! impl_all {
     { $(impl $color:ident($($field:ident: $T:ident),*)[$n:expr];)* } => { $(

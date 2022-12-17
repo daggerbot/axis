@@ -12,7 +12,7 @@ use math::{TryMul, Vector2};
 
 use crate::image::{Image, ImageExt, ImageMut, OutOfBounds};
 
-/// Image type backed by a `Vec`.
+/// Owned image type backed by a `Vec` in which pixels are stored sequentially.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct VecImage<T> {
     buf: Vec<T>,

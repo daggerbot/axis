@@ -224,9 +224,8 @@ where
     type Pixel<'b> = <I::Pixel<'a> as WithAlpha>::Output where Self: 'b;
 
     unsafe fn get_pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> Self::Pixel<'b> {
-        self.parent
-            .get_pixel_unchecked(pos)
-            .with_alpha(self.mask.get_pixel_unchecked(pos).into_component())
+        self.parent.get_pixel_unchecked(pos)
+                   .with_alpha(self.mask.get_pixel_unchecked(pos).into_component())
     }
 
     fn height(&self) -> usize {
@@ -238,10 +237,8 @@ where
     }
 
     fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
-        Ok(self
-            .parent
-            .try_get_pixel(pos)?
-            .with_alpha(self.mask.try_get_pixel(pos)?.into_component()))
+        Ok(self.parent.try_get_pixel(pos)?
+                      .with_alpha(self.mask.try_get_pixel(pos)?.into_component()))
     }
 
     fn width(&self) -> usize {
@@ -256,10 +253,7 @@ impl<'a, A: 'a + Image, B: Image> Image for Zip<'a, A, B> {
     type Pixel<'b> = (A::Pixel<'b>, B::Pixel<'b>) where Self: 'b;
 
     unsafe fn get_pixel_unchecked<'b>(&'b self, pos: Vector2<usize>) -> Self::Pixel<'b> {
-        (
-            self.0.get_pixel_unchecked(pos),
-            self.1.get_pixel_unchecked(pos),
-        )
+        (self.0.get_pixel_unchecked(pos), self.1.get_pixel_unchecked(pos))
     }
 
     fn height(&self) -> usize {

@@ -46,7 +46,7 @@ impl TryFrom<u8> for FilterMethod {
     }
 }
 
-/// Filters bytes for better compression.
+/// Filters bytes in a PNG pixel stream for better compression.
 pub struct BaseFilterer<W: Write> {
     bytes_per_row: usize,
     height: usize,
@@ -61,9 +61,9 @@ impl<W: Write> BaseFilterer<W> {
         self.inner
     }
 
-    pub fn new(
-        inner: W, image_size: Vector2<usize>, bit_depth: u8, color_type: ColorType,
-    ) -> BaseFilterer<W> {
+    pub fn new(inner: W, image_size: Vector2<usize>, bit_depth: u8, color_type: ColorType)
+        -> BaseFilterer<W>
+    {
         let bytes_per_row = match bit_depth {
             1 | 2 | 4 => DivCeil::div_ceil(image_size.x, 8 / bit_depth as usize),
             8 => image_size.x * color_type.channel_count(),
@@ -132,10 +132,10 @@ impl<W: Write> Filterer<W> {
         }
     }
 
-    pub fn new(
-        filter_method: FilterMethod, inner: W, image_size: Vector2<usize>, bit_depth: u8,
-        color_type: ColorType,
-    ) -> Filterer<W> {
+    pub fn new(filter_method: FilterMethod, inner: W, image_size: Vector2<usize>, bit_depth: u8,
+               color_type: ColorType)
+               -> Filterer<W>
+    {
         match filter_method {
             FilterMethod::Base => {
                 Filterer::Base(BaseFilterer::new(inner, image_size, bit_depth, color_type))
@@ -176,9 +176,9 @@ impl<R: Read> BaseDefilterer<R> {
         self.inner
     }
 
-    pub fn new(
-        inner: R, image_size: Vector2<usize>, bit_depth: u8, color_type: ColorType,
-    ) -> BaseDefilterer<R> {
+    pub fn new(inner: R, image_size: Vector2<usize>, bit_depth: u8, color_type: ColorType)
+        -> BaseDefilterer<R>
+    {
         let (bytes_per_row, sub_pitch) = match bit_depth {
             1 | 2 | 4 => (DivCeil::div_ceil(image_size.x, 8 / bit_depth as usize), 1),
             8 => (
@@ -262,20 +262,20 @@ impl<R: Read> Read for BaseDefilterer<R> {
                     buf[i] = buf[i].wrapping_add(average);
                 },
                 4 /* Paeth */ => {
-                    let (left, above, corner) = match ((self.row_byte_index + i).checked_sub(self.sub_pitch), self.row_index) {
+                    let (left, above, corner) = match ((self.row_byte_index + i)
+                                                       .checked_sub(self.sub_pitch), self.row_index)
+                    {
                         (None, 0) => (0, 0, 0),
                         (None, _) => (0, self.prev_row_data[self.row_byte_index + i], 0),
                         (Some(j), 0) => (self.row_data[j], 0, 0),
-                        (Some(j), _) => (self.row_data[j], self.prev_row_data[self.row_byte_index + i], self.prev_row_data[j]),
+                        (Some(j), _) => (self.row_data[j],
+                                         self.prev_row_data[self.row_byte_index + i],
+                                         self.prev_row_data[j]),
                     };
                     buf[i] = buf[i].wrapping_add(paeth(left, above, corner));
                 },
-                _ => {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        Error::FilterByte { raw: row_prefix },
-                    ))
-                },
+                _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData,
+                                                    Error::FilterByte { raw: row_prefix })),
             }
         }
 
@@ -305,14 +305,13 @@ impl<R: Read> Defilterer<R> {
         }
     }
 
-    pub fn new(
-        filter_method: FilterMethod, inner: R, image_size: Vector2<usize>, bit_depth: u8,
-        color_type: ColorType,
-    ) -> Defilterer<R> {
+    pub fn new(filter_method: FilterMethod, inner: R, image_size: Vector2<usize>, bit_depth: u8,
+               color_type: ColorType)
+               -> Defilterer<R>
+    {
         match filter_method {
-            FilterMethod::Base => Defilterer::Base(BaseDefilterer::new(
-                inner, image_size, bit_depth, color_type,
-            )),
+            FilterMethod::Base => Defilterer::Base(BaseDefilterer::new(inner, image_size, bit_depth,
+                                                                       color_type)),
         }
     }
 }

@@ -12,7 +12,8 @@ use crate::color::{Color, FromColor, FromColorLossy};
 use crate::component::{IntoComponent, IntoComponentLossy};
 use crate::rgb::Rgba;
 
-/// Alpha color type.
+/// Alpha color type. This represents opacity and no actual color. It may be useful in some
+/// situations such as `GL_ALPHA` textures in older versions of OpenGL.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(transparent)]
@@ -46,6 +47,8 @@ impl<T> From<[T; 1]> for Alpha<T> {
     }
 }
 
+/// Converts a boolean value representing fully tansparent (false) or fully opaque (true) into an
+/// alpha value.
 impl<T> FromColor<bool> for Alpha<T>
 where
     bool: IntoComponent<T>,

@@ -43,16 +43,12 @@ impl Display for Win32Error {
     fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
         unsafe {
             let mut buf: *mut u16 = std::ptr::null_mut();
+
             winapi::um::winbase::FormatMessageW(
                 winapi::um::winbase::FORMAT_MESSAGE_ALLOCATE_BUFFER
-                    | winapi::um::winbase::FORMAT_MESSAGE_FROM_SYSTEM,
-                std::ptr::null(),
-                self.error_code,
-                0,
-                &mut buf as *mut *mut u16 as *mut u16,
-                0,
-                std::ptr::null_mut(),
-            );
+                | winapi::um::winbase::FORMAT_MESSAGE_FROM_SYSTEM,
+                std::ptr::null(), self.error_code, 0, &mut buf as *mut *mut u16 as *mut u16, 0,
+                std::ptr::null_mut());
 
             if buf.is_null() {
                 return write!(fmt, "win32 error code {}", self.error_code);
@@ -80,5 +76,7 @@ pub fn clear_last_error() {
 
 /// Returns the last Win32 error code for the current thread.
 pub fn get_last_error_code() -> u32 {
-    unsafe { winapi::um::errhandlingapi::GetLastError() }
+    unsafe {
+        winapi::um::errhandlingapi::GetLastError()
+    }
 }

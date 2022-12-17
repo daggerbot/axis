@@ -66,20 +66,33 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
         let xcb = connection.xcb_connection_ptr();
         let atoms = self.device.atoms().clone();
         let manager = self.device.window_manager().clone();
-        let pixel_format = self
-            .pixel_format
-            .clone()
-            .unwrap_or_else(|| self.device.default_pixel_format());
+        let pixel_format = self.pixel_format.clone()
+                                            .unwrap_or_else(|| self.device.default_pixel_format());
         let pos = match self.pos {
-            WindowPos::Default => Vector2::new(0, 0),  // TODO
-            WindowPos::Centered => Vector2::new(0, 0), // TODO
+            WindowPos::Default => {
+                // This seems to behave as expected under KDE Plasma 5. Is there a convention that
+                // the window manager interprets (0, 0) as "use default"? If not, I'm not even sure
+                // how we would pick a "default" position.
+                Vector2::new(0, 0)
+            },
+            WindowPos::Centered => {
+                // TODO: We'll have to query a bunch of properties on the root window to determine
+                // where "centered" is.
+                Vector2::new(0, 0)
+            },
             WindowPos::Point(pos) => Vector2 {
                 x: math::clamp(pos.x, -0x8000, 0x7fff) as i16,
                 y: math::clamp(pos.y, -0x8000, 0x7fff) as i16,
             },
         };
+
         let size = match self.size {
-            None => Vector2::new(640, 480), // TODO
+            None => {
+                // TODO: It will probably be better to make the default size some fraction of the
+                // workspace size on whatever monitor the window is being created on. This will get
+                // weird if the window ends up split between multiple monitors.
+                Vector2::new(640, 480)
+            },
             Some(size) => Vector2 {
                 x: math::clamp(size.x, 1, 0xffff) as u16,
                 y: math::clamp(size.y, 1, 0xffff) as u16,
@@ -94,21 +107,11 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
 
         unsafe {
             xid = xcb_sys::xcb_generate_id(xcb);
-            xcb_sys::xcb_create_window(
-                xcb,
-                pixel_format.depth(),
-                xid,
-                self.device.root_window_id(),
-                pos.x,
-                pos.y,
-                size.x,
-                size.y,
-                0,
-                xcb_sys::XCB_WINDOW_CLASS_INPUT_OUTPUT as u16,
-                pixel_format.visual_id(),
-                attr_mask,
-                attrs.as_ptr() as *const _,
-            );
+            xcb_sys::xcb_create_window(xcb, pixel_format.depth(), xid, self.device.root_window_id(),
+                                       pos.x, pos.y, size.x, size.y, 0,
+                                       xcb_sys::XCB_WINDOW_CLASS_INPUT_OUTPUT as u16,
+                                       pixel_format.visual_id(),
+                                       attr_mask, attrs.as_ptr() as *const _);
         }
 
         let shared = Rc::new(WindowShared {
@@ -121,6 +124,8 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
             xid: Cell::new(Some(xid)),
         });
 
+        // Add the window to our "window manager" (not to be confused with an X window manager) so
+        // we'll know the ID of the window that an event occurred on.
         manager.borrow_mut().map.insert(xid, shared.clone());
 
         let window = Window {
@@ -137,12 +142,10 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
             window.set_visible(true)?;
         }
 
-        // Subscribe to close events.
-        window.set_property(
-            atoms.WM_PROTOCOLS,
-            xcb_sys::XCB_ATOM_ATOM,
-            &[atoms.WM_DELETE_WINDOW],
-        )?;
+        // Specify which WM protocols we want to receive events for. `WM_DELETE_WINDOW` is for close
+        // requests. If this protocol is not handled this way, it seems to kill the client when the
+        // user closes the window, which is weird and extreme.
+        window.set_property(atoms.WM_PROTOCOLS, xcb_sys::XCB_ATOM_ATOM, &[atoms.WM_DELETE_WINDOW])?;
 
         Ok(window)
     }
@@ -184,10 +187,13 @@ impl<W: 'static + Clone> WindowShared<W> {
         &self.id
     }
 
+    /// Returns true if the window's direct parent is the root window. If false, this may mean the
+    /// window is under control of an X window manager.
     pub fn is_parent_root(&self) -> bool {
         self.parent_xid.get() == Some(self.root_xid)
     }
 
+    /// Returns the window's X ID or returns an error if it is no longer valid.
     pub fn try_xid(&self) -> Result<u32> {
         match self.xid.get() {
             None => Err(err!(ResourceExpired(EXPIRED_MSG))),
@@ -195,24 +201,33 @@ impl<W: 'static + Clone> WindowShared<W> {
         }
     }
 
+    /// Changes the value indicating what we believe to be the window's parent. This is called in
+    /// response to a reparent event.
     pub fn update_parent_xid(&self, parent_xid: u32) {
         self.parent_xid.set(Some(parent_xid));
     }
 
+    /// Changes what we believe to be the window's position. Returns true if this is different from
+    /// the previous value we had stored.
     pub fn update_pos(&self, pos: Vector2<i16>) -> bool {
         self.pos.replace(Some(pos)) != Some(pos)
     }
 
+    /// Changes what we believe to be the window's client size. Returns true if this is different
+    /// from the previous value we had stored.
     pub fn update_size(&self, size: Vector2<u16>) -> bool {
         self.size.replace(Some(size)) != Some(size)
     }
 
+    /// Changes what we believe to be the window's visibility flag. Returns true if this is
+    /// different from the previous value we had stored.
     pub fn update_visibility(&self, visible: bool) -> bool {
         self.visible.replace(visible) != visible
     }
 }
 
-/// Window ID map.
+/// Map of `WindowShared` objects by their X ID. Since we can't grab our `Window` object from its ID
+/// alone, we use this to grab the corresponding `WindowShared` object instead.
 pub struct WindowManager<W: 'static + Clone> {
     map: HashMap<u32, Rc<WindowShared<W>>>,
 }
@@ -261,23 +276,19 @@ impl<W: 'static + Clone> Window<W> {
 }
 
 impl<W: 'static + Clone> Window<W> {
-    pub(crate) fn get_property_vec<T: PropertyValue>(
-        &self, property: u32, ty: u32,
-    ) -> Result<Option<Vec<T>>> {
-        self.connection
-            .get_property_vec(self.shared.try_xid()?, property, ty)
+    /// Gets the full value of a variable-length window property.
+    pub(crate) fn get_property_vec<T: PropertyValue>(&self, property: u32, ty: u32)
+        -> Result<Option<Vec<T>>>
+    {
+        self.connection.get_property_vec(self.shared.try_xid()?, property, ty)
     }
 
-    pub(crate) fn set_property<T: PropertyValue>(
-        &self, property: u32, ty: u32, value: &[T],
-    ) -> Result<()> {
-        self.connection.change_property(
-            ChangePropertyMode::Replace,
-            self.shared.try_xid()?,
-            property,
-            ty,
-            value,
-        );
+    /// Changes a window property value.
+    pub(crate) fn set_property<T: PropertyValue>(&self, property: u32, ty: u32, value: &[T])
+        -> Result<()>
+    {
+        self.connection.change_property(ChangePropertyMode::Replace, self.shared.try_xid()?,
+                                        property, ty, value);
         Ok(())
     }
 }
@@ -325,11 +336,9 @@ impl<W: 'static + Clone> IWindow for Window<W> {
 
         unsafe {
             xcb_sys::xcb_configure_window(
-                self.xcb,
-                xid,
+                self.xcb, xid,
                 (xcb_sys::XCB_CONFIG_WINDOW_X | xcb_sys::XCB_CONFIG_WINDOW_Y) as u16,
-                [x as u32, y as u32].as_ptr() as *const _,
-            );
+                [x as u32, y as u32].as_ptr() as *const _);
         }
 
         Ok(())
@@ -342,11 +351,9 @@ impl<W: 'static + Clone> IWindow for Window<W> {
 
         unsafe {
             xcb_sys::xcb_configure_window(
-                self.xcb,
-                xid,
+                self.xcb, xid,
                 (xcb_sys::XCB_CONFIG_WINDOW_WIDTH | xcb_sys::XCB_CONFIG_WINDOW_HEIGHT) as u16,
-                [width as u32, height as u32].as_ptr() as *const _,
-            );
+                [width as u32, height as u32].as_ptr() as *const _);
         }
 
         Ok(())
@@ -355,11 +362,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
     fn set_title(&self, title: &str) -> Result<()> {
         let bytes = title.as_bytes();
         self.set_property(xcb_sys::XCB_ATOM_WM_NAME, xcb_sys::XCB_ATOM_STRING, bytes)?;
-        self.set_property(
-            xcb_sys::XCB_ATOM_WM_ICON_NAME,
-            xcb_sys::XCB_ATOM_STRING,
-            bytes,
-        )?;
+        self.set_property(xcb_sys::XCB_ATOM_WM_ICON_NAME, xcb_sys::XCB_ATOM_STRING, bytes)?;
         self.set_property(self.atoms._NET_WM_NAME, self.atoms.UTF8_STRING, bytes)?;
         self.set_property(self.atoms._NET_WM_ICON_NAME, self.atoms.UTF8_STRING, bytes)?;
         Ok(())

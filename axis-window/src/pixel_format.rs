@@ -11,15 +11,15 @@ use std::rc::Rc;
 /// Interface for window system pixel formats.
 pub trait IPixelFormat {}
 
-/// Object interface for window system pixel formats.
+/// Wrapper interface which allows an `IPixelFormat` object to be boxed.
 pub trait IAnyPixelFormat {}
 
 impl<T: IPixelFormat> IAnyPixelFormat for T {}
 
-/// Opaque pixel format type.
+/// Window pixel format type. This is a boxed wrapper around an [`IPixelFormat`] object.
 pub struct PixelFormat(pub(crate) Rc<dyn 'static + IAnyPixelFormat>);
 
-/// Opaque pixel format iterator.
+/// Iterator over available pixel formats.
 pub struct PixelFormats(pub(crate) Box<dyn 'static + Iterator<Item = PixelFormat>>);
 
 impl Iterator for PixelFormats {

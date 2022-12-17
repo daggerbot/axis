@@ -26,8 +26,7 @@ pub unsafe fn strlen<T: Copy + Eq + Zero>(mut ptr: *const T) -> usize {
 mod libc {
     use std::fmt::{Debug, Formatter};
 
-    /// Box type which frees its data with [`libc::free`]. This can be removed when
-    /// [`std::alloc::Allocator`] becomes stable.
+    /// Box type which frees its data with [`libc::free`].
     pub struct CBox<T: 'static + ?Sized> {
         data: &'static mut T,
     }
@@ -60,6 +59,7 @@ mod libc {
 
     impl<T: 'static + ?Sized> std::ops::Deref for CBox<T> {
         type Target = T;
+
         fn deref(&self) -> &T {
             self.data
         }

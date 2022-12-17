@@ -35,7 +35,7 @@ pub trait IContext: 'static + Sized {
     fn run<F: Fn(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, f: F) -> Result<()>;
 }
 
-/// Window system context object trait.
+/// Wrapper trait which allows an `IContext` object to be boxed.
 pub trait IAnyContext {
     type WindowId: 'static + Clone;
 
@@ -52,9 +52,7 @@ impl<T: IContext> IAnyContext for T {
     }
 
     fn devices(&self) -> Devices<Self::WindowId> {
-        Devices(Box::new(
-            IContext::devices(self).map(|device| Device(Rc::new(device))),
-        ))
+        Devices(Box::new(IContext::devices(self).map(|device| Device(Rc::new(device)))))
     }
 
     fn run(&self, main_loop: &MainLoop, f: &dyn Fn(Event<Self::WindowId>)) -> Result<()> {
@@ -62,7 +60,7 @@ impl<T: IContext> IAnyContext for T {
     }
 }
 
-/// Opaque window system context type.
+/// Window system context type. This is a boxed wrapper around an [`IContext`] object.
 pub struct Context<W: 'static + Clone>(pub(crate) Box<dyn 'static + IAnyContext<WindowId = W>>);
 
 impl<W: 'static + Clone> Context<W> {

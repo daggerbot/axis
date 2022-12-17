@@ -50,10 +50,7 @@ impl IPixelFormat for PixelFormat {}
 impl PartialEq for PixelFormat {
     fn eq(&self, rhs: &PixelFormat) -> bool {
         self.visual_ptr == rhs.visual_ptr
-            // Not sure if this is necessary. Can different X screens have the same visual
-            // available? Would XCB give different structs if they did? Let's leave this until we've
-            // determined that it's definitely unnecessary.
-            && self.screen_index == rhs.screen_index
+        && self.screen_index == rhs.screen_index
     }
 }
 

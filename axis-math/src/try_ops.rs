@@ -84,6 +84,8 @@ impl<T: IntLimits> Saturate for Result<T, UnderflowError> {
     }
 }
 
+//--------------------------------------------------------------------------------------------------
+
 macro_rules! impl_unary_refs {
     { $(impl $trait:ident::$fn:ident for $type:ty;)* } => { $(
         impl<'a> $trait for &'a $type {

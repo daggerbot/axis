@@ -34,16 +34,11 @@ impl PartialEq for PixelFormat {
     fn eq(&self, rhs: &PixelFormat) -> bool {
         match (self, rhs) {
             (&PixelFormat::Default, &PixelFormat::Default) => true,
-            (
-                &PixelFormat::Gdi {
-                    index: index0,
-                    pfd: pfd0,
-                },
-                &PixelFormat::Gdi {
-                    index: index1,
-                    pfd: pfd1,
-                },
-            ) => {
+            (&PixelFormat::Gdi { index: index0, pfd: pfd0 },
+             &PixelFormat::Gdi { index: index1, pfd: pfd1 }) =>
+            {
+                // The `winapi` crate doesn't appear to implement `PartialEq` for the structs it
+                // defines, so we just have to make the comparison ourselves.
                 index0 == index1
                     && pfd0.nSize == pfd1.nSize
                     && pfd0.nVersion == pfd1.nVersion

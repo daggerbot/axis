@@ -8,7 +8,15 @@
 
 use std::num::FpCategory;
 
-/// Trait for color components.
+/// Trait for color components. Color types defined in this crate are composed of one or more
+/// components, or channels, with the same type. This trait is for working with values of that type.
+///
+/// Integer components range from 0 to the type's maximum value. For unsigned integers, this
+/// includes all possible values.
+///
+/// Floating point components range from 0 to 1. In some situations, values outside this range may
+/// be allowed, particularly in intermediate calculations. The `saturate()` and `wrap()` functions
+/// can be used to ensure a value within this range.
 pub trait Component {
     /// Returns the maximum component value.
     ///
@@ -30,18 +38,10 @@ pub trait Component {
 }
 
 impl Component for bool {
-    fn max() -> bool {
-        true
-    }
-    fn min() -> bool {
-        false
-    }
-    fn saturate(self) -> bool {
-        self
-    }
-    fn wrap(self) -> bool {
-        self
-    }
+    fn max() -> bool { true }
+    fn min() -> bool { false }
+    fn saturate(self) -> bool { self }
+    fn wrap(self) -> bool { self }
 }
 
 /// Converts losslessly from another color component type.
@@ -105,6 +105,8 @@ impl<F, T: FromComponentLossy<F>> IntoComponentLossy<T> for F {
         T::from_component_lossy(self)
     }
 }
+
+//--------------------------------------------------------------------------------------------------
 
 macro_rules! impl_uint {
     ($($type:ident),*) => { $(

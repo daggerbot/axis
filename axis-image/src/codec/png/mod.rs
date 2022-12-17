@@ -16,11 +16,25 @@ mod interlace;
 pub use self::chunk::{ChunkId, ChunkReader, ChunkWriter, ProgressiveChunkReader};
 pub use self::compress::CompressionMethod;
 pub use self::decode::{
-    read, read_IDAT, read_IHDR, read_PLTE, read_file, read_signature, AnyPixelReader, DecodePixel,
-    DecodedImage, PixelReader,
+    AnyPixelReader,
+    DecodePixel,
+    DecodedImage,
+    PixelReader,
+    read,
+    read_IDAT,
+    read_IHDR,
+    read_PLTE,
+    read_file,
+    read_signature,
 };
 pub use self::encode::{
-    write_IDAT, write_IEND, write_IHDR, write_PLTE, write_signature, EncodePixel, Encoder,
+    EncodePixel,
+    Encoder,
+    write_IDAT,
+    write_IEND,
+    write_IHDR,
+    write_PLTE,
+    write_signature,
 };
 pub use self::filter::FilterMethod;
 pub use self::interlace::InterlaceMethod;
@@ -224,94 +238,46 @@ impl Header {
 /// PNG encoder/decoder error type.
 #[derive(Debug)]
 pub enum Error {
-    Arithmetic {
-        source: Box<dyn 'static + Send + Sync + std::error::Error>,
-    },
-    BitDepth {
-        bit_depth: u8,
-        color_type: ColorType,
-    },
+    Arithmetic { source: Box<dyn 'static + Send + Sync + std::error::Error> },
+    BitDepth { bit_depth: u8, color_type: ColorType },
     Crc,
-    ChunkId {
-        bytes: [u8; 4],
-    },
-    ChunkIdLen {
-        len: usize,
-    },
-    ChunkLen {
-        chunk_id: ChunkId,
-        len: u32,
-    },
-    ColorType {
-        raw: u8,
-    },
-    CompressionMethod {
-        raw: u8,
-    },
-    CriticalChunk {
-        chunk_id: ChunkId,
-    },
-    DuplicateChunk {
-        chunk_id: ChunkId,
-    },
-    FilterByte {
-        raw: u8,
-    },
-    FilterMethod {
-        raw: u8,
-    },
-    ImageSize {
-        size: Vector2<usize>,
-    },
-    InterlaceMethod {
-        raw: u8,
-    },
-    InvalidArgument {
-        detail: &'static str,
-    },
-    Io {
-        source: std::io::Error,
-    },
-    MissingChunk {
-        chunk_id: ChunkId,
-    },
+    ChunkId { bytes: [u8; 4] },
+    ChunkIdLen { len: usize },
+    ChunkLen { chunk_id: ChunkId, len: u32 },
+    ColorType { raw: u8 },
+    CompressionMethod { raw: u8 },
+    CriticalChunk { chunk_id: ChunkId },
+    DuplicateChunk { chunk_id: ChunkId },
+    FilterByte { raw: u8 },
+    FilterMethod { raw: u8 },
+    ImageSize { size: Vector2<usize> },
+    InterlaceMethod { raw: u8 },
+    InvalidArgument { detail: &'static str },
+    Io { source: std::io::Error },
+    MissingChunk { chunk_id: ChunkId },
     MissingPalette,
-    PaletteLen {
-        len: usize,
-    },
+    PaletteLen { len: usize },
     Signature,
-    UnexpectedChunk {
-        chunk_id: ChunkId,
-        detail: &'static str,
-    },
-    WrongChunk {
-        expected: ChunkId,
-        found: ChunkId,
-    },
+    UnexpectedChunk { chunk_id: ChunkId, detail: &'static str },
+    WrongChunk { expected: ChunkId, found: ChunkId },
 }
 
 impl Display for Error {
     fn fmt(&self, fmt: &mut Formatter) -> std::fmt::Result {
         match *self {
             Error::Arithmetic { ref source } => write!(fmt, "arithmetic error: {}", source),
-            Error::BitDepth {
-                bit_depth,
-                color_type,
-            } => write!(fmt, "invalid png bit depth: {} {}", color_type, bit_depth),
+            Error::BitDepth { bit_depth, color_type } => {
+                write!(fmt, "invalid png bit depth: {} {}", color_type, bit_depth)
+            },
             Error::Crc => fmt.write_str("chunk crc mismatch"),
             Error::ChunkId { bytes } => {
-                write!(
-                    fmt,
-                    "invalid png chunk id: {:02x} {:02x} {:02x} {:02x}",
-                    bytes[0], bytes[1], bytes[2], bytes[3]
-                )
+                write!(fmt, "invalid png chunk id: {:02x} {:02x} {:02x} {:02x}",
+                       bytes[0], bytes[1], bytes[2], bytes[3])
             },
             Error::ChunkIdLen { len } => write!(fmt, "invalid png chunk id length: {}", len),
-            Error::ChunkLen { chunk_id, len } => write!(
-                fmt,
-                "invalid/unexpected png chunk length: {}, {} bytes",
-                chunk_id, len
-            ),
+            Error::ChunkLen { chunk_id, len } => {
+                write!(fmt, "invalid/unexpected png chunk length: {}, {} bytes", chunk_id, len)
+            },
             Error::ColorType { raw } => write!(fmt, "invalid png color type: {}", raw),
             Error::CompressionMethod { raw } => {
                 write!(fmt, "invalid png compression method: {}", raw)
@@ -335,11 +301,9 @@ impl Display for Error {
             Error::UnexpectedChunk { chunk_id, detail } => {
                 write!(fmt, "unexpected png chunk ({}): {}", chunk_id, detail)
             },
-            Error::WrongChunk { expected, found } => write!(
-                fmt,
-                "wrong chunk id: expected {}, found {}",
-                expected, found
-            ),
+            Error::WrongChunk { expected, found } => {
+                write!(fmt, "wrong chunk id: expected {}, found {}", expected, found)
+            },
         }
     }
 }

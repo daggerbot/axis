@@ -46,9 +46,9 @@ pub fn blank<T: Default>(size: Vector2<usize>) -> Generate<T, impl Fn(Vector2<us
 }
 
 /// Returns an image object which returns the same color for each pixel.
-pub fn solid<'a, T: 'a + Clone>(
-    size: Vector2<usize>, pixel: &'a T,
-) -> Generate<T, impl 'a + Fn(Vector2<usize>) -> T> {
+pub fn solid<'a, T: 'a + Clone>(size: Vector2<usize>, pixel: &'a T)
+    -> Generate<T, impl 'a + Fn(Vector2<usize>) -> T>
+{
     generate(size, |_| pixel.clone())
 }
 

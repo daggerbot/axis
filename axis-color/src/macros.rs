@@ -6,6 +6,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+/// Implements memberwise color-scalar operators.
 macro_rules! impl_scalar_ops {
     { $(impl $trait:ident::$fn:ident for $color:ident($field:ident);)* } => { $(
         impl<T> $trait<T> for $color<T>
@@ -101,6 +102,7 @@ macro_rules! impl_scalar_ops {
     )* };
 }
 
+/// Implements memberwise color-scalar assignment operators.
 macro_rules! impl_scalar_assign_ops {
     { $(impl $trait:ident::$fn:ident for $color:ident($field:ident);)* } => { $(
         impl<T> $trait<T> for $color<T>

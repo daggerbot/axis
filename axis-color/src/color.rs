@@ -6,7 +6,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-/// Color type properties.
+/// Color type properties. This may be useful when implementing functionality that works with
+/// arbitrary color spaces.
 pub trait Color {
     type Component;
     const NUM_COMPONENTS: usize;
@@ -49,7 +50,7 @@ impl<F, T: FromColorLossy<F>> IntoColorLossy<T> for F {
     }
 }
 
-/// Adds an alpha channel to the color.
+/// Adds an alpha channel to a color.
 pub trait WithAlpha: Color {
     type Output: Color<Component = Self::Component>;
     fn with_alpha(self, a: Self::Component) -> Self::Output;

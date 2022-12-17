@@ -23,7 +23,7 @@ use crate::image::Image;
 
 const MAX_IDAT_SIZE: usize = 64 * 1024;
 
-/// PNG image encoder.
+/// Encodes an image as a PNG stream.
 pub struct Encoder<'i, 'p, I>
 where
     I: 'i + Image,
@@ -62,9 +62,9 @@ where
     }
 
     /// Changes the encoder's interlace method.
-    pub fn with_interlace_method(
-        &mut self, interlace_method: Option<InterlaceMethod>,
-    ) -> &mut Self {
+    pub fn with_interlace_method(&mut self, interlace_method: Option<InterlaceMethod>)
+        -> &mut Self
+    {
         self.interlace_method = interlace_method;
         self
     }
@@ -78,7 +78,7 @@ where
         Ok(self)
     }
 
-    /// Encodes the image as a PNG stream.
+    /// Writes the encoded image.
     pub fn write<W: Write>(&self, w: &mut W) -> Result<(), Error> {
         let header = Header::for_image(self.image);
         write_signature(w)?;
@@ -91,14 +91,8 @@ where
             }
         }
 
-        write_IDAT(
-            w,
-            self.image,
-            self.bit_depth,
-            self.compression_method,
-            self.filter_method,
-            self.interlace_method,
-        )?;
+        write_IDAT(w, self.image, self.bit_depth, self.compression_method, self.filter_method,
+                   self.interlace_method)?;
         write_IEND(w)?;
         Ok(())
     }
@@ -179,7 +173,7 @@ impl<'a, T: EncodePixel> EncodePixel for &'a T {
     }
 }
 
-/// Packs pixels into bytes.
+/// Writes packed pixels to the inner writer.
 struct PixelPacker<W: Write> {
     bit_depth: u8,
     byte: u8,
@@ -189,11 +183,13 @@ struct PixelPacker<W: Write> {
 }
 
 impl<W: Write> PixelPacker<W> {
+    /// Writes the current byte (if a partial byte has been packed) and returns the inner writer.
     fn finish(mut self) -> std::io::Result<W> {
         self.pad()?;
         Ok(self.inner)
     }
 
+    /// Constructs a pixel packer.
     fn new(inner: W, bit_depth: u8) -> PixelPacker<W> {
         PixelPacker {
             bit_depth: match bit_depth {
@@ -207,6 +203,7 @@ impl<W: Write> PixelPacker<W> {
         }
     }
 
+    /// Packs a pixel into the data stream.
     fn pack<P: EncodePixel>(&mut self, pixel: P) -> std::io::Result<()> {
         match self.bit_depth {
             1 | 2 | 4 => {
@@ -265,12 +262,12 @@ pub fn write_IEND<W: Write>(w: &mut W) -> Result<(), Error> {
     Ok(())
 }
 
-/// Writes the PNG `IDAT` pixel data chunk(s).
+/// Writes the PNG pixel data stream consisting of one or more `IDAT` chunks.
 #[allow(non_snake_case)]
-pub fn write_IDAT<'a, W, I>(
-    w: &mut W, image: &'a I, bit_depth: u8, compression_method: CompressionMethod,
-    filter_method: FilterMethod, interlace_method: Option<InterlaceMethod>,
-) -> Result<(), Error>
+pub fn write_IDAT<'a, W, I>(w: &mut W, image: &'a I, bit_depth: u8,
+                            compression_method: CompressionMethod, filter_method: FilterMethod,
+                            interlace_method: Option<InterlaceMethod>)
+                            -> Result<(), Error>
 where
     W: Write,
     I: Image,
@@ -336,6 +333,7 @@ pub fn write_IHDR<W: Write>(w: &mut W, header: &Header) -> Result<(), Error> {
     chunk.write_u8(header.compression_method as u8)?;
     chunk.write_u8(header.filter_method as u8)?;
     chunk.write_u8(InterlaceMethod::as_byte(header.interlace_method))?;
+
     chunk.finish()?;
     Ok(())
 }
@@ -352,6 +350,7 @@ pub fn write_PLTE<W: Write>(w: &mut W, palette: &[Rgb<u8>]) -> Result<(), Error>
         let array: [u8; 3] = (*color).into();
         chunk.write_all(&array[..])?;
     }
+
     chunk.finish()?;
     Ok(())
 }

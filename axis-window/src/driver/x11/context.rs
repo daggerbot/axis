@@ -19,7 +19,8 @@ use crate::error::Result;
 use crate::event::{Event, UpdateKind};
 use crate::ffi::CBox;
 
-/// Macro which defines our `Atoms` struct.
+/// Macro which defines our `Atoms` struct. As the list of atoms we use grows, doing this by hand
+/// would become repetative and error-prone.
 macro_rules! atoms {
     { $($atom:ident,)* } => {
         /// Commonly used X11 atoms.
@@ -87,6 +88,7 @@ impl<W: 'static + Clone> Context<W> {
 }
 
 impl<W: 'static + Clone> Context<W> {
+    /// Safe wrapper around `xcb_flush()` with error checking.
     fn flush(&self) -> Result<()> {
         unsafe {
             xcb_sys::xcb_flush(self.xcb);
@@ -103,10 +105,9 @@ impl<W: 'static + Clone> Context<W> {
     fn init(connection: Connection) -> Result<Context<W>> {
         #[cfg(feature = "x11-sys")]
         unsafe {
-            x11_sys::XSetEventQueueOwner(
-                connection.xlib_display_ptr(),
-                x11_sys::XEventQueueOwner_XCBOwnsEventQueue,
-            );
+            // We'll use XCB to poll events.
+            x11_sys::XSetEventQueueOwner(connection.xlib_display_ptr(),
+                                         x11_sys::XEventQueueOwner_XCBOwnsEventQueue);
         }
 
         let atoms = Atoms::init(&connection)?;
@@ -148,7 +149,13 @@ impl<W: 'static + Clone> IContext for Context<W> {
 
     fn run<F: Fn(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, callback: F) -> Result<()> {
         main_loop.clear_quit_flag();
+
+        // Flag which indicates whether we can emit another Update event. Using this flag prevents
+        // two Update events from being emitted in a row when the main loop is passive.
         let update_ready = Cell::new(true);
+
+        // Callback wrapper which sets `update_ready` when called. We use this because we don't
+        // otherwise know if the callback was actually invoked when we pass it to `handle_event()`.
         let f = |event| {
             callback(event);
             update_ready.set(true);
@@ -163,26 +170,23 @@ impl<W: 'static + Clone> IContext for Context<W> {
                     match main_loop.update_kind() {
                         UpdateKind::Passive => {
                             if update_ready.take() {
-                                callback(Event::Update {
-                                    kind: UpdateKind::Passive,
-                                });
+                                callback(Event::Update { kind: UpdateKind::Passive });
                                 if main_loop.is_quit_requested() {
                                     break 'main_loop;
                                 }
                             }
-
                             self.flush()?;
                             xevent_ptr = xcb_sys::xcb_wait_for_event(self.xcb);
                         },
 
                         UpdateKind::Active | UpdateKind::VBlank => {
-                            callback(Event::Update {
-                                kind: UpdateKind::Active,
-                            });
+                            // No way (that I'm aware of) to handle VBlank here.
+                            callback(Event::Update { kind: UpdateKind::Active });
                             continue 'main_loop;
                         },
                     }
                 }
+
                 if !xevent_ptr.is_null() {
                     let xevent = CBox::from_raw(xevent_ptr);
                     self.handle_event(xevent, &f)?;

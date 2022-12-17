@@ -10,7 +10,7 @@ use std::io::Read;
 
 const STACK_BUFFER_LEN: usize = 4096;
 
-/// Reader extensions.
+/// Internally used reader extensions.
 pub trait ReadExt: Read {
     /// Reads and discards up to `n` bytes.
     fn skip(&mut self, n: usize) -> std::io::Result<usize> {

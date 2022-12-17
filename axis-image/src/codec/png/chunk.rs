@@ -16,7 +16,8 @@ use peekread::PeekRead;
 use crate::codec::png::Error;
 use crate::io::ReadExt;
 
-/// PNG chunk ID.
+/// 4-letter PNG chunk ID. This is the second field found in the chunk header and determines what a
+/// chunk's data stream is used for.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ChunkId {
     raw: [u8; 4],
@@ -51,7 +52,9 @@ impl ChunkId {
     pub fn as_str(&self) -> &str {
         // All valid chunk IDs are valid UTF-8. Invalid chunk IDs can only be acquired privately or
         // by unsafe means, so this function can be considered safe.
-        unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
+        unsafe {
+            std::str::from_utf8_unchecked(self.as_bytes())
+        }
     }
 
     /// Returns true if the chunk is ancillary, as indicated by the first letter being lower-case.
@@ -167,7 +170,10 @@ impl<'a> TryFrom<&'a str> for ChunkId {
     }
 }
 
-/// Reads PNG chunks.
+/// Reads the data stream in a PNG chunk and checks the CRC at the end.
+///
+/// The caller must call [`finish`] when reading is done. If the chunk reader is simply dropped, the
+/// CRC is ignored.
 pub struct ChunkReader<R: Read> {
     chunk_id: ChunkId,
     crc: Hasher,
@@ -199,6 +205,9 @@ impl<R: Read> ChunkReader<R> {
     }
 
     /// Begins reading a chunk.
+    ///
+    /// Fails if the end of the stream is reached unexpectedly or if an invalid chunk ID is
+    /// encountered.
     pub fn new(mut inner: R) -> Result<ChunkReader<R>, Error> {
         let len = inner.read_u32::<BE>()?;
         let mut chunk_id_bytes = [0; 4];
@@ -214,13 +223,16 @@ impl<R: Read> ChunkReader<R> {
         })
     }
 
-    /// Returns the number of bytes remaining to be read.
+    /// Returns the number of bytes remaining in the chunk's data stream.
     pub fn remaining(&self) -> u32 {
         self.len - self.pos
     }
 }
 
 impl<R: Read> ChunkReader<R> {
+    /// Reads to the end of the chunk and checks the CRC. Because the hasher's `finalize()` function
+    /// consumes the hasher, this results in the hasher being reset. The implementation of
+    /// `ProgressiveChunkReader` takes advantage of this.
     fn check_crc(&mut self) -> Result<(), Error> {
         self.skip_to_end()?;
         let crc = self.inner.read_u32::<BE>()?;
@@ -233,25 +245,32 @@ impl<R: Read> ChunkReader<R> {
 
 impl<R: Read> Read for ChunkReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let len = std::cmp::min(
-            buf.len(),
-            usize::try_from(self.remaining()).unwrap_or(usize::MAX),
-        );
-        if len == 0 {
+        let n_to_read = std::cmp::min(buf.len(),
+                                      usize::try_from(self.remaining()).unwrap_or(usize::MAX));
+        if n_to_read == 0 {
             return Ok(0);
         }
-        let n_read = self.inner.read(buf)?;
+        let n_read = self.inner.read(&mut buf[..n_to_read])?;
         if n_read == 0 {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
-        assert!(n_read <= len);
+        assert!(n_read <= n_to_read);
         self.crc.update(&buf[..n_read]);
         self.pos += n_read as u32;
         Ok(n_read)
     }
 }
 
-/// Reads consecutive chunks with the same ID as a single stream.
+/// Reads consecutive chunks with the same ID as a single data stream.
+///
+/// This is provided because some data streams, particularly `IDAT`, may be split into multiple
+/// chunks so the encoder doesn't have to know the length of an entire data stream before writing.
+/// The `IDAT` stream is compressed, and the encoder would have no way to know how long the
+/// compressed stream would be prior to writing unless it compressed the entire stream twice.
+///
+/// The inner reader must implement [`PeekRead`] rather than simply [`Read`]. This is because the
+/// progressive chunk reader must look ahead 8 bytes to determine whether the next chunk has the
+/// same ID as the current one.
 pub struct ProgressiveChunkReader<R: PeekRead> {
     chunk: ChunkReader<R>,
 }
@@ -262,11 +281,13 @@ impl<R: PeekRead> ProgressiveChunkReader<R> {
         self.chunk.chunk_id
     }
 
+    /// Constructs a progressive chunk reader which will interpret subsequent chunks with the same
+    /// ID as being part of the same data stream.
     pub fn new(chunk: ChunkReader<R>) -> ProgressiveChunkReader<R> {
         ProgressiveChunkReader { chunk }
     }
 
-    /// Finishes reading the multi-chunk stream and returns the inner peekable reader.
+    /// Finishes reading all subsequent chunks with the same ID and returns the inner reader.
     pub fn finish(mut self) -> Result<R, Error> {
         self.skip_to_end()?;
         Ok(self.chunk.inner)
@@ -300,9 +321,7 @@ impl<R: PeekRead> Read for ProgressiveChunkReader<R> {
             self.chunk.inner.peek().read_exact(&mut chunk_header[..])?;
             let chunk_id = match ChunkId::try_from(&chunk_header[4..8]) {
                 Ok(chunk_id) => chunk_id,
-                Err(_) => {
-                    return Ok(0);
-                },
+                Err(_) => return Ok(0),
             };
             if chunk_id != self.chunk.chunk_id {
                 return Ok(0);
@@ -317,7 +336,11 @@ impl<R: PeekRead> Read for ProgressiveChunkReader<R> {
     }
 }
 
-/// Writes PNG chunks.
+/// Writes a PNG chunk.
+///
+/// The user must call [`finish`] to complete writing the chunk, or else the entire chunk, including
+/// the header, will be discarded. This is because the length of the chunk must be known before
+/// anything can be written to the inner writer.
 pub struct ChunkWriter<W: Write> {
     chunk_id: ChunkId,
     crc: Hasher,
@@ -346,8 +369,9 @@ impl<W: Write> ChunkWriter<W> {
         }
     }
 
-    /// Constructs a PNG chunk writer which breaks up a stream into multiple chunks if they exceed a
-    /// specified size.
+    /// Constructs a PNG chunk writer which breaks up a data stream into multiple chunks if they
+    /// exceed a specified size. The is useful particularly for writing the `IDAT` stream, which is
+    /// allowed to be broken up into multiple consecutive chunks.
     pub fn new_progressive(inner: W, chunk_id: ChunkId, max_len: usize) -> ChunkWriter<W> {
         ChunkWriter {
             chunk_id,
@@ -361,6 +385,7 @@ impl<W: Write> ChunkWriter<W> {
 }
 
 impl<W: Write> ChunkWriter<W> {
+    /// Writes the chunk to the inner writer and resets the state of the chunk writer.
     fn write_chunk(&mut self) -> std::io::Result<()> {
         let len = match u32::try_from(self.data.len()) {
             Ok(n) => n,
@@ -387,25 +412,26 @@ impl<W: Write> Write for ChunkWriter<W> {
         if buf.is_empty() {
             return Ok(0);
         }
-        let len = match self.max_len {
+
+        let n_to_write = match self.max_len {
             None => buf.len(),
             Some(max_len) => {
-                let mut len = std::cmp::min(buf.len(), max_len - self.data.len());
-                if len == 0 {
+                let mut n_to_write = std::cmp::min(buf.len(), max_len - self.data.len());
+                if n_to_write == 0 {
                     if self.progressive {
                         self.write_chunk()?;
-                        len = std::cmp::min(buf.len(), max_len);
+                        n_to_write = std::cmp::min(buf.len(), max_len);
                     } else {
                         return Ok(0);
                     }
                 }
-                len
+                n_to_write
             },
         };
 
-        let n = self.data.write(&buf[..len])?;
-        self.crc.update(&buf[..n]);
-        Ok(n)
+        let n_written = self.data.write(&buf[..n_to_write])?;
+        self.crc.update(&buf[..n_written]);
+        Ok(n_written)
     }
 }
 

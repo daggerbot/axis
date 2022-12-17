@@ -14,7 +14,7 @@ pub trait Continuous: Scalar {}
 impl Continuous for f32 {}
 impl Continuous for f64 {}
 
-/// Gets a type's multiplicative identity.
+/// Gets a type's multiplicative identity (one).
 pub trait Identity {
     fn identity() -> Self;
 }

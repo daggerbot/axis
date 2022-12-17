@@ -30,7 +30,7 @@ mod subimage;
 mod vec_image;
 
 pub use bitmap::Bitmap;
-pub use generate::{blank, generate, solid, Generate};
+pub use generate::{Generate, blank, generate, solid};
 pub use image::{Image, ImageMut, OutOfBounds};
 pub use map::{Cloned, Convert, ConvertLossy, Copied, Map, To, WithMask, Zip};
 pub use subimage::{Subimage, SubimageMut};

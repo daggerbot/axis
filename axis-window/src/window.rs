@@ -27,8 +27,16 @@ impl Default for WindowKind {
 /// Determines where to place a new window.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum WindowPos {
+    /// Allow the window system to choose where to place a window.
     Default,
+
+    /// Centers the window on the default monitor. Programs should not rely on this working exactly
+    /// as expected. Typically used for splash windows.
     Centered,
+
+    /// Specifies where the window's top-left corner should appear relative to some undefined
+    /// location. This is typically used when a program saves the window's position for the next
+    /// time the program is launched.
     Point(Vector2<Coord>),
 }
 
@@ -38,15 +46,16 @@ impl Default for WindowPos {
     }
 }
 
-/// Interface for window builders.
+/// Interface for window builders. We can't simply have one window builder type that works for all
+/// platforms because some platforms may define their own properties that can be specified at
+/// creation time.
 pub trait IWindowBuilder {
     type Context: IContext<WindowBuilder = Self>;
 
     /// Builds a window and gives it an ID. The ID does not have to be unique, but it is the value
     /// that the library user will get back when receiving window events.
-    fn build(
-        &self, id: <Self::Context as IContext>::WindowId,
-    ) -> Result<<Self::Context as IContext>::Window>;
+    fn build(&self, id: <Self::Context as IContext>::WindowId)
+        -> Result<<Self::Context as IContext>::Window>;
 
     /// Sets the initial window position.
     fn with_pos(&mut self, pos: WindowPos) -> &mut Self;
@@ -61,7 +70,7 @@ pub trait IWindowBuilder {
     fn with_visibility(&mut self, visible: bool) -> &mut Self;
 }
 
-/// Object interface for window builders.
+/// Wrapper trait which allows an `IWindowBuilder` object to be boxed.
 pub trait IAnyWindowBuilder {
     type WindowId: 'static + Clone;
 
@@ -96,7 +105,7 @@ impl<T: IWindowBuilder> IAnyWindowBuilder for T {
     }
 }
 
-/// Opaque window builder type.
+/// Window builder type.
 pub struct WindowBuilder<W: 'static + Clone>(
     pub(crate) Box<dyn 'static + IAnyWindowBuilder<WindowId = W>>,
 );
@@ -177,7 +186,7 @@ pub trait IWindow {
     fn title(&self) -> Result<String>;
 }
 
-/// Object interface for top-level windows.
+/// Wrapper trait which allows an `IWindow` object to be boxed.
 pub trait IAnyWindow {
     type WindowId: 'static + Clone;
 
@@ -242,7 +251,7 @@ impl<T: IWindow> IAnyWindow for T {
     }
 }
 
-/// Opaque top-level window type.
+/// Top-level window type.
 pub struct Window<W: 'static + Clone>(pub(crate) Box<dyn 'static + IAnyWindow<WindowId = W>>);
 
 impl<W: 'static + Clone> Window<W> {

@@ -24,6 +24,8 @@ pub trait WrappingSub<Rhs = Self> {
     fn wrapping_sub(self, rhs: Rhs) -> Self::Output;
 }
 
+//--------------------------------------------------------------------------------------------------
+
 macro_rules! impl_binary {
     { $(impl $trait:ident::$fn:ident for $type:ident;)* } => { $(
         impl $trait for $type {

@@ -32,9 +32,7 @@ impl<'a, I: 'a + Image> Image for Subimage<'a, I> {
     }
 
     fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
-        Ok(self
-            .parent
-            .get_pixel(self.check_pixel_pos(pos)? + self.region.0))
+        Ok(self.parent.get_pixel(self.check_pixel_pos(pos)? + self.region.0))
     }
 
     fn width(&self) -> usize {
@@ -64,9 +62,7 @@ impl<'a, I: 'a + Image> Image for SubimageMut<'a, I> {
     }
 
     fn try_get_pixel<'b>(&'b self, pos: Vector2<usize>) -> Result<Self::Pixel<'b>, OutOfBounds> {
-        Ok(self
-            .parent
-            .get_pixel(self.check_pixel_pos(pos)? + self.region.0))
+        Ok(self.parent.get_pixel(self.check_pixel_pos(pos)? + self.region.0))
     }
 
     fn width(&self) -> usize {
@@ -84,8 +80,7 @@ impl<'a, I: 'a + ImageMut> ImageMut for SubimageMut<'a, I> {
     fn try_set_pixel(
         &mut self, pos: Vector2<usize>, pixel: I::PixelValue,
     ) -> Result<(), OutOfBounds> {
-        self.parent
-            .set_pixel(self.check_pixel_pos(pos)? + self.region.0, pixel);
+        self.parent.set_pixel(self.check_pixel_pos(pos)? + self.region.0, pixel);
         Ok(())
     }
 }

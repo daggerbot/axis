@@ -26,23 +26,25 @@ use crate::vec_image::VecImage;
 
 /// Trait for decoding pixels from `u8`/`u16` sequences.
 pub trait DecodePixel: Pixel {
-    fn decode_pixel<E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>>(
-        buf: &[E],
-    ) -> Self;
+    fn decode_pixel<E>(buf: &[E]) -> Self
+    where
+        E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>;
 }
 
 impl DecodePixel for u8 {
-    fn decode_pixel<E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>>(
-        buf: &[E],
-    ) -> Self {
+    fn decode_pixel<E>(buf: &[E]) -> u8
+    where
+        E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>,
+    {
         buf[0].into_lossy()
     }
 }
 
 impl<T: PixelComponent> DecodePixel for Lum<T> {
-    fn decode_pixel<E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>>(
-        buf: &[E],
-    ) -> Self {
+    fn decode_pixel<E>(buf: &[E]) -> Lum<T>
+    where
+        E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>,
+    {
         Lum {
             l: buf[0].into_component_lossy(),
         }
@@ -50,9 +52,10 @@ impl<T: PixelComponent> DecodePixel for Lum<T> {
 }
 
 impl<T: PixelComponent> DecodePixel for LumAlpha<T> {
-    fn decode_pixel<E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>>(
-        buf: &[E],
-    ) -> Self {
+    fn decode_pixel<E>(buf: &[E]) -> LumAlpha<T>
+    where
+        E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>,
+    {
         LumAlpha {
             l: buf[0].into_component_lossy(),
             a: buf[1].into_component_lossy(),
@@ -61,9 +64,10 @@ impl<T: PixelComponent> DecodePixel for LumAlpha<T> {
 }
 
 impl<T: PixelComponent> DecodePixel for Rgb<T> {
-    fn decode_pixel<E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>>(
-        buf: &[E],
-    ) -> Self {
+    fn decode_pixel<E>(buf: &[E]) -> Rgb<T>
+    where
+        E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>,
+    {
         Rgb {
             r: buf[0].into_component_lossy(),
             g: buf[1].into_component_lossy(),
@@ -73,9 +77,10 @@ impl<T: PixelComponent> DecodePixel for Rgb<T> {
 }
 
 impl<T: PixelComponent> DecodePixel for Rgba<T> {
-    fn decode_pixel<E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>>(
-        buf: &[E],
-    ) -> Self {
+    fn decode_pixel<E>(buf: &[E]) -> Rgba<T>
+    where
+        E: Copy + IntoComponentLossy<Self::Component> + IntoLossy<Self::Component>,
+    {
         Rgba {
             r: buf[0].into_component_lossy(),
             g: buf[1].into_component_lossy(),
@@ -85,7 +90,8 @@ impl<T: PixelComponent> DecodePixel for Rgba<T> {
     }
 }
 
-/// Unpacks pixels, possibly with bit depths less than 8, from a byte stream.
+/// Reads packed pixels from a decompressed, defiltered data stream. This is used internally by
+/// [`PixelReader`] to perform the bit manipulating operations.
 struct PixelUnpacker<R: Read> {
     bit_depth: u8,
     byte: Option<u8>,
@@ -95,10 +101,12 @@ struct PixelUnpacker<R: Read> {
 }
 
 impl<R: Read> PixelUnpacker<R> {
+    /// Returns the inner reader.
     fn into_inner(self) -> R {
         self.inner
     }
 
+    /// Constructs a pixel unpacker.
     fn new(inner: R, bit_depth: u8) -> PixelUnpacker<R> {
         PixelUnpacker {
             bit_depth,
@@ -109,12 +117,14 @@ impl<R: Read> PixelUnpacker<R> {
         }
     }
 
-    /// Discards the rest of the current byte (for sub-byte bit depths).
+    /// If the bit depth is less than 8 and only part of a byte has been written, this discards the
+    /// rest of that byte. This is called at the end of each row.
     fn pad(&mut self) {
         self.byte = None;
         self.shift = 0;
     }
 
+    /// Reads the next pixel.
     fn unpack<P: DecodePixel>(&mut self) -> std::io::Result<P> {
         match self.bit_depth {
             1 | 2 | 4 => {
@@ -163,7 +173,13 @@ impl<R: Read> PixelUnpacker<R> {
     }
 }
 
-/// Reads and decodes pixels from a PNG `IDAT` chunk.
+/// Reads and decodes pixels from a PNG `IDAT` data stream.
+///
+/// The inner reader must implement [`PeekRead`] because this uses a [`ProgressiveChunkReader`] to
+/// read until a non-`IDAT` chunk is encountered.
+///
+/// When finished with the pixel reader, the user must call [`finish`] to ensure that the CRC is
+/// valid for the last `IDAT` chunk.
 pub struct PixelReader<R: PeekRead, P: DecodePixel> {
     bit_depth: u8,
     filter_method: FilterMethod,
@@ -174,25 +190,18 @@ pub struct PixelReader<R: PeekRead, P: DecodePixel> {
 }
 
 impl<R: PeekRead, P: DecodePixel> PixelReader<R, P> {
+    /// Skips any remaining data in the `IDAT` data stream and returns the inner reader.
     pub fn finish(mut self) -> Result<R, Error> {
-        self.inner
-            .take()
-            .unwrap()
-            .into_inner()
-            .into_inner()
-            .into_inner()
-            .finish()
+        self.inner.take().unwrap().into_inner().into_inner().into_inner().finish()
     }
 
-    pub fn new(
-        inner: ProgressiveChunkReader<R>, header: &Header,
-    ) -> Result<PixelReader<R, P>, Error> {
+    /// Performs some sanity checks and constructs a pixel reader.
+    pub fn new(inner: ProgressiveChunkReader<R>, header: &Header)
+        -> Result<PixelReader<R, P>, Error>
+    {
         if header.color_type != P::COLOR_TYPE {
-            return Err(Error::InvalidArgument {
-                detail: "png color type mismatch",
-            });
+            return Err(Error::InvalidArgument { detail: "png color type mismatch" });
         }
-
         header.color_type.check_bit_depth(header.bit_depth)?;
 
         Ok(PixelReader {
@@ -214,8 +223,8 @@ impl<R: PeekRead, P: DecodePixel> PixelReader<R, P> {
         })
     }
 
-    /// Reads the next pixel from the stream. Returns the position and the pixel value. Note that
-    /// due to interlacing, adjacent pixels may not be sequential.
+    /// Reads the next pixel from the stream. Returns the position and the pixel value. This is
+    /// because pixels may not be read sequentially as expected if the image is interlaced.
     pub fn next_pixel(&mut self) -> Result<Option<(Vector2<usize>, P)>, Error> {
         loop {
             match self.interlacer.next() {
@@ -249,7 +258,7 @@ impl<R: PeekRead, P: DecodePixel> PixelReader<R, P> {
     }
 }
 
-/// Enumeration of PNG pixel readers.
+/// Enumeration of PNG pixel readers. See [`PixelReader`].
 pub enum AnyPixelReader<R: PeekRead> {
     Index(PixelReader<R, u8>),
     Gray8(PixelReader<R, Lum<u8>>),
@@ -260,6 +269,23 @@ pub enum AnyPixelReader<R: PeekRead> {
     Rgb16(PixelReader<R, Rgb<u16>>),
     RgbAlpha8(PixelReader<R, Rgba<u8>>),
     RgbAlpha16(PixelReader<R, Rgba<u16>>),
+}
+
+impl<R: PeekRead> AnyPixelReader<R> {
+    /// Skips any remaining data in the `IDAT` data stream and returns the inner reader.
+    pub fn finish(self) -> Result<R, Error> {
+        match self {
+            AnyPixelReader::Index(r) => r.finish(),
+            AnyPixelReader::Gray8(r) => r.finish(),
+            AnyPixelReader::Gray16(r) => r.finish(),
+            AnyPixelReader::GrayAlpha8(r) => r.finish(),
+            AnyPixelReader::GrayAlpha16(r) => r.finish(),
+            AnyPixelReader::Rgb8(r) => r.finish(),
+            AnyPixelReader::Rgb16(r) => r.finish(),
+            AnyPixelReader::RgbAlpha8(r) => r.finish(),
+            AnyPixelReader::RgbAlpha16(r) => r.finish(),
+        }
+    }
 }
 
 /// Fully read and decoded PNG image buffer.
@@ -296,6 +322,9 @@ pub enum DecodedImage {
 
 /// Reads a PNG stream.
 pub fn read<R: Read>(r: &mut R) -> Result<DecodedImage, Error> {
+    // NOTE: We should probably introduce a `Decoder` type which performs this same thing as a
+    // state machine rather than a loop.
+
     let mut r = BufPeekReader::new(r);
     read_signature(&mut r)?;
 
@@ -309,11 +338,7 @@ pub fn read<R: Read>(r: &mut R) -> Result<DecodedImage, Error> {
 
         match chunk_id {
             ChunkId::IEND => match image {
-                None => {
-                    return Err(Error::MissingChunk {
-                        chunk_id: ChunkId::IDAT,
-                    })
-                },
+                None => return Err(Error::MissingChunk { chunk_id: ChunkId::IDAT }),
                 Some(image) => return Ok(image),
             },
 
@@ -467,11 +492,11 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Result<DecodedImage, Error> {
     read(&mut File::open(path)?)
 }
 
-/// Reads the contents of a series of PNG `IDAT` chunks.
+/// Reads the contents of a PNG `IDAT` data stream.
 #[allow(non_snake_case)]
-pub fn read_IDAT<R: PeekRead>(
-    header: &Header, chunk: ProgressiveChunkReader<R>,
-) -> Result<AnyPixelReader<R>, Error> {
+pub fn read_IDAT<R: PeekRead>(header: &Header, chunk: ProgressiveChunkReader<R>)
+    -> Result<AnyPixelReader<R>, Error>
+{
     let chunk_id = chunk.chunk_id();
     match chunk_id {
         ChunkId::IDAT => (),

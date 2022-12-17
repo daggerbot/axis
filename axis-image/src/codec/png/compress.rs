@@ -46,7 +46,7 @@ impl TryFrom<u8> for CompressionMethod {
     }
 }
 
-/// Stream wrapper for compressing data.
+/// Wrapper which compressed data using the corresponding PNG compression method.
 pub enum Compressor<W: Write> {
     Zlib(ZlibEncoder<W>),
 }
@@ -63,8 +63,7 @@ impl<W: Write> Compressor<W> {
     pub fn new(inner: W, compression_method: CompressionMethod) -> Compressor<W> {
         match compression_method {
             CompressionMethod::Zlib => {
-                let inner = ZlibEncoder::new(inner, flate2::Compression::best());
-                Compressor::Zlib(inner)
+                Compressor::Zlib(ZlibEncoder::new(inner, flate2::Compression::best()))
             },
         }
     }
@@ -84,12 +83,13 @@ impl<W: Write> Write for Compressor<W> {
     }
 }
 
-/// Stream wrapper for decompressing data.
+/// Wrapper which decompresses data using the corresponding PNG compression method.
 pub enum Decompressor<R: Read> {
     Zlib(ZlibDecoder<R>),
 }
 
 impl<R: Read> Decompressor<R> {
+    /// Returns the underlying reader. Any unread data in the compressed stream is discarded.
     pub fn into_inner(self) -> R {
         match self {
             Decompressor::Zlib(r) => r.into_inner(),

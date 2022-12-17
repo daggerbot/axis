@@ -12,7 +12,8 @@ use crate::color::{Color, FromColor, FromColorLossy, WithAlpha};
 use crate::component::{Component, IntoComponent, IntoComponentLossy};
 use crate::lum::{Lum, LumAlpha};
 
-/// Red color type.
+/// Color type consisting only of a red channel. Despite the name, this is provided for use with
+/// 1-channel OpenGL textures in which the channel has an arbitrary use.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Red<T> {
@@ -24,6 +25,7 @@ impl<T> Color for Red<T> {
     const NUM_COMPONENTS: usize = 1;
 }
 
+/// Converts a boolean value representing the minimum (false) and maximum (true) red values.
 impl<T> FromColor<bool> for Red<T>
 where
     bool: IntoComponent<T>,
@@ -43,6 +45,7 @@ impl<T, F: IntoComponent<T>> FromColor<Lum<F>> for Red<T> {
     }
 }
 
+/// Converts a boolean value representing the minimum (false) and maximum (true) red values.
 impl<T> FromColorLossy<bool> for Red<T>
 where
     bool: IntoComponentLossy<T>,
@@ -108,7 +111,10 @@ impl_scalar_assign_ops! {
     impl SubAssign::sub_assign for Red(r);
 }
 
-/// Red-green color type.
+//--------------------------------------------------------------------------------------------------
+
+/// Red-green color type. Despite the name, this is provided for use with 2-channel OpenGL textures
+/// in which the channels have an arbitrary use.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rg<T> {
@@ -193,6 +199,8 @@ impl_scalar_assign_ops! {
     impl DivAssign::div_assign for Rg(r, g);
     impl MulAssign::mul_assign for Rg(r, g);
 }
+
+//--------------------------------------------------------------------------------------------------
 
 /// Red-green-blue color type.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -319,6 +327,8 @@ impl_scalar_assign_ops! {
     impl DivAssign::div_assign for Rgb(r, g, b);
     impl MulAssign::mul_assign for Rgb(r, g, b);
 }
+
+//--------------------------------------------------------------------------------------------------
 
 /// Red-green-blue-alpha color type.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -454,6 +464,8 @@ impl<T> Into<(T, T, T, T)> for Rgba<T> {
         (self.r, self.g, self.b, self.a)
     }
 }
+
+//--------------------------------------------------------------------------------------------------
 
 macro_rules! impl_all {
     { $(impl $color:ident($($field:ident: $T:ident),*)[$n:expr];)* } => { $(

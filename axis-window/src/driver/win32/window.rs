@@ -17,7 +17,7 @@ use math::{IntoLossy, Vector2};
 
 use crate::driver::win32::context::Context;
 use crate::driver::win32::device::Device;
-use crate::driver::win32::error::{clear_last_error, Win32Error};
+use crate::driver::win32::error::{Win32Error, clear_last_error};
 use crate::driver::win32::event::EventManager;
 use crate::driver::win32::ffi::get_exe_handle;
 use crate::driver::win32::gdi::WindowDc;
@@ -58,11 +58,7 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
 
     fn build(&self, id: W) -> Result<Window<W>> {
         let class_name_ptr = WINDOW_CLASS_MANAGER.lock()?.register::<W>()?;
-        let title: Vec<u16> = self
-            .title
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
+        let title: Vec<u16> = self.title.encode_utf16().chain(std::iter::once(0)).collect();
 
         let (mut style, ex_style) = match self.kind {
             WindowKind::Normal => (winapi::um::winuser::WS_OVERLAPPEDWINDOW, 0),
@@ -72,12 +68,13 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
         }
 
         let pos = match self.pos {
-            WindowPos::Default => Vector2::new(
-                winapi::um::winuser::CW_USEDEFAULT,
-                winapi::um::winuser::CW_USEDEFAULT,
-            ),
+            WindowPos::Default => Vector2 {
+                x: winapi::um::winuser::CW_USEDEFAULT,
+                y: winapi::um::winuser::CW_USEDEFAULT,
+            },
             WindowPos::Centered => {
-                // TODO
+                // TODO: Let's treat this the same as Default for the moment. There are some other
+                // things we have to implement before we can center a window.
                 Vector2::new(
                     winapi::um::winuser::CW_USEDEFAULT,
                     winapi::um::winuser::CW_USEDEFAULT,
@@ -86,12 +83,14 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
             WindowPos::Point(pos) => pos,
         };
 
-        // If size is specified, interpret it is client size, not full window size.
+        // If size is specified, interpret it is client size, not full window size. This requires
+        // using AdjustWindowRectEx().
         let size = match self.size {
             None => Vector2 {
                 x: winapi::um::winuser::CW_USEDEFAULT,
                 y: winapi::um::winuser::CW_USEDEFAULT,
             },
+
             Some(size) => {
                 let mut rect = winapi::shared::windef::RECT {
                     left: 0,
@@ -114,20 +113,10 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
         let hwnd;
 
         unsafe {
-            hwnd = winapi::um::winuser::CreateWindowExW(
-                ex_style,
-                class_name_ptr,
-                title.as_ptr(),
-                style,
-                pos.x,
-                pos.y,
-                size.x,
-                size.y,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                hinstance,
-                std::ptr::null_mut(),
-            );
+            hwnd = winapi::um::winuser::CreateWindowExW(ex_style, class_name_ptr, title.as_ptr(),
+                                                        style, pos.x, pos.y, size.x, size.y,
+                                                        std::ptr::null_mut(), std::ptr::null_mut(),
+                                                        hinstance, std::ptr::null_mut());
         }
 
         if hwnd.is_null() {
@@ -144,11 +133,14 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
 
         window.shared.set_pixel_format(&self.pixel_format)?;
 
-        // So we can properly report events.
+        // We'll later use get_window_long_ptr() to get our WindowShared. We could use a hash table
+        // like we do in other drivers, but this is more idiomatic Win32 and is potentially faster
+        // if tons of events are handled.
         window.shared.set_window_long_ptr(
             winapi::um::winuser::GWLP_USERDATA,
             Rc::into_raw(window.shared.clone()) as isize,
         )?;
+
         Ok(window)
     }
 
@@ -173,7 +165,7 @@ impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
     }
 }
 
-/// Data shared between a [`Window`] and its underlying `HWND`.
+/// Data which is shared (via `Rc`) between our `Window` object and an `HWND`.
 pub struct WindowShared<W: 'static + Clone> {
     event_manager: Rc<EventManager<W>>,
     hwnd: Cell<Option<winapi::shared::windef::HWND>>,
@@ -185,6 +177,7 @@ impl<W: 'static + Clone> WindowShared<W> {
         &self.event_manager
     }
 
+    /// Removes the association between our `WindowShared` and the `HWND`.
     pub unsafe fn expire(hwnd: winapi::shared::windef::HWND) -> Option<Rc<WindowShared<W>>> {
         let window_ref = match WindowShared::<W>::from_hwnd(hwnd) {
             None => return None,
@@ -196,6 +189,9 @@ impl<W: 'static + Clone> WindowShared<W> {
         Some(window)
     }
 
+    /// Gets a `WindowShared` from an `HWND`'s `GWLP_USERDATA` value. This is unsafe because the
+    /// Win32 API allows this value to be anything, not just a valid pointer. Use this only if it
+    /// can be assumed that we created the `HWND` passed here.
     pub unsafe fn from_hwnd<'a>(hwnd: winapi::shared::windef::HWND) -> Option<&'a WindowShared<W>> {
         if hwnd.is_null() {
             return None;
@@ -216,6 +212,7 @@ impl<W: 'static + Clone> WindowShared<W> {
         &self.id
     }
 
+    /// Gets the underlying `HWND`, or returns an error if it is no longer valid.
     pub fn try_hwnd(&self) -> Result<winapi::shared::windef::HWND> {
         match self.hwnd.get() {
             None => Err(err!(ResourceExpired("window destroyed"))),
@@ -331,7 +328,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
             Ok(value) => value as u32,
             Err(err) => {
                 if err.kind() != ErrorKind::ResourceExpired {
-                    error!("{}", err);
+                    error!("GetWindowLongPtrW: {}", err);
                 }
                 return false;
             },
@@ -360,15 +357,9 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         let hwnd = self.shared.try_hwnd()?;
 
         unsafe {
-            if winapi::um::winuser::SetWindowPos(
-                hwnd,
-                std::ptr::null_mut(),
-                pos.x,
-                pos.y,
-                0,
-                0,
-                winapi::um::winuser::SWP_NOSIZE | winapi::um::winuser::SWP_NOZORDER,
-            ) == 0
+            if winapi::um::winuser::SetWindowPos(hwnd, std::ptr::null_mut(), pos.x, pos.y, 0, 0,
+                                                 winapi::um::winuser::SWP_NOSIZE
+                                                 | winapi::um::winuser::SWP_NOZORDER) == 0
             {
                 return Err(err!(SystemError("SetWindowPos"): Win32Error::last()));
             }
@@ -381,15 +372,10 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         let hwnd = self.shared.try_hwnd()?;
 
         unsafe {
-            if winapi::um::winuser::SetWindowPos(
-                hwnd,
-                std::ptr::null_mut(),
-                0,
-                0,
-                std::cmp::max(size.x, 1),
-                std::cmp::max(size.y, 1),
-                winapi::um::winuser::SWP_NOMOVE | winapi::um::winuser::SWP_NOZORDER,
-            ) == 0
+            if winapi::um::winuser::SetWindowPos(hwnd, std::ptr::null_mut(), 0, 0,
+                                                 std::cmp::max(size.x, 1), std::cmp::max(size.y, 1),
+                                                 winapi::um::winuser::SWP_NOMOVE
+                                                 | winapi::um::winuser::SWP_NOZORDER) == 0
             {
                 return Err(err!(SystemError("SetWindowPos"): Win32Error::last()));
             }
@@ -400,6 +386,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
 
     fn set_title(&self, title: &str) -> Result<()> {
         let hwnd = self.shared.try_hwnd()?;
+        // NOTE: Should we return NulError if `title` contains any '\0'?
         let wtitle: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
 
         unsafe {
@@ -419,6 +406,8 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         };
 
         unsafe {
+            // The return value for ShowWindow doesn't indicate whether this failed. I've even
+            // removed the GetLastError check because it seemed to be giving false positives.
             winapi::um::winuser::ShowWindow(hwnd, command);
         }
 
@@ -448,6 +437,8 @@ impl<W: 'static + Clone> IWindow for Window<W> {
         clear_last_error();
 
         unsafe {
+            // Determine the length of the window title. The docs say that this value might be
+            // greater than the actual length, but not less.
             let mut ilen = winapi::um::winuser::GetWindowTextLengthW(hwnd);
             if ilen <= 0 {
                 match Win32Error::try_last() {
@@ -458,6 +449,7 @@ impl<W: 'static + Clone> IWindow for Window<W> {
             let mut len = usize::try_from(ilen)?;
             buf.resize(len + 1, 0);
 
+            // Get the actual window title. The length may not be what was previously indicated.
             ilen = winapi::um::winuser::GetWindowTextW(hwnd, buf.as_mut_ptr(), ilen + 1);
             if ilen <= 0 {
                 match Win32Error::try_last() {
@@ -490,9 +482,6 @@ lazy_static! {
 impl WindowClassManager {
     /// Registers a class (if it has not already been registered) and returns its null-terminated
     /// class name.
-    ///
-    /// If the name is already taken, this tries another name. This ensures that things don't break
-    /// if multiple versions of this crate are used in a project.
     fn register<W: 'static + Clone>(&mut self) -> Result<*const u16> {
         let type_id = TypeId::of::<W>();
         if let Some(name) = self.map.get(&type_id) {
@@ -529,11 +518,14 @@ impl WindowClassManager {
 
         let mut name: Vec<u16>;
 
+        // Loop until we successfully register our class. If multiple versions of this crate are
+        // compiled into the executable, then multiple WindowClassManagers will exist, so we can't
+        // rely on having a static name for this class. Increment the number at the end of the name
+        // until this succeeds.
         'name_loop: loop {
             name = format!("AxisWindow_{}", self.next_num)
-                .encode_utf16()
-                .chain(std::iter::once(0))
-                .collect();
+                   .encode_utf16().chain(std::iter::once(0)).collect();
+
             wc.lpszClassName = name.as_ptr();
 
             unsafe {

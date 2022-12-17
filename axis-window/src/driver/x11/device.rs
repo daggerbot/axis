@@ -129,6 +129,7 @@ impl<W: 'static + Clone> Iterator for Devices<W> {
         if self.iter.rem == 0 {
             return None;
         }
+
         let device = Device {
             atoms: self.atoms.clone(),
             connection: self.connection.clone(),

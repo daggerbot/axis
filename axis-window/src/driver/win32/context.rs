@@ -46,7 +46,8 @@ impl<W: 'static + Clone> Context<W> {
         &self.event_manager
     }
 
-    /// Returns an [`Rc`] that is unique to this context.
+    /// Returns an [`Rc`] that is unique to this context. Used to compare whether two contexts or
+    /// devices are the same. There has to be a better way to do this.
     pub(crate) fn unique(&self) -> &Rc<()> {
         &self.unique
     }
@@ -72,11 +73,18 @@ impl<W: 'static + Clone> IContext for Context<W> {
     fn run<F: Fn(Event<W>)>(&self, main_loop: &MainLoop, callback: F) -> Result<()> {
         main_loop.clear_quit_flag();
         let mut msg = unsafe { std::mem::zeroed() };
+
+        // Flag which indicates whether another Update event can be sent. This prevents signalling
+        // two or more update events in a row unnecessarily if the main loop is passive.
         let update_ready = Cell::new(true);
+
+        // Callback wrapper. Most of the time an event is sent, we are ready for another update
+        // event.
         let f = |event| {
             (callback)(event);
             update_ready.set(true);
         };
+
         let _event_handler = unsafe { EventHandler::push(self.event_manager.as_ref(), &f) };
 
         'main_loop: while !main_loop.is_quit_requested() {
@@ -88,13 +96,9 @@ impl<W: 'static + Clone> IContext for Context<W> {
 
             unsafe {
                 // Check for immediately available messages.
-                match winapi::um::winuser::PeekMessageW(
-                    &mut msg,
-                    std::ptr::null_mut(),
-                    0,
-                    0,
-                    winapi::um::winuser::PM_REMOVE,
-                ) {
+                match winapi::um::winuser::PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0,
+                                                        winapi::um::winuser::PM_REMOVE)
+                {
                     0 => (),
                     _ => {
                         if msg.message == winapi::um::winuser::WM_QUIT {
@@ -110,9 +114,7 @@ impl<W: 'static + Clone> IContext for Context<W> {
                 match main_loop.update_kind() {
                     UpdateKind::Passive => {
                         if update_ready.take() {
-                            (callback)(Event::Update {
-                                kind: UpdateKind::Passive,
-                            });
+                            (callback)(Event::Update { kind: UpdateKind::Passive });
                             if main_loop.is_quit_requested() {
                                 break 'main_loop;
                             }
@@ -130,9 +132,7 @@ impl<W: 'static + Clone> IContext for Context<W> {
                     },
 
                     UpdateKind::Active | UpdateKind::VBlank => {
-                        (callback)(Event::Update {
-                            kind: UpdateKind::Active,
-                        });
+                        (callback)(Event::Update { kind: UpdateKind::Active });
                     },
                 }
             }

@@ -34,14 +34,18 @@ impl Connection {
     pub fn open<S: Into<Vec<u8>>>(name: S) -> Result<Connection> {
         let c_name = CString::new(name)?;
 
-        unsafe { Connection::open_raw(c_name.as_ptr()) }
+        unsafe {
+            Connection::open_raw(c_name.as_ptr())
+        }
     }
 
     /// Opens a connection to the default X server.
     ///
     /// If the `x11-sys` feature is enabled, the Xlib API owns the event queue by default.
     pub fn open_default() -> Result<Connection> {
-        unsafe { Connection::open_raw(std::ptr::null()) }
+        unsafe {
+            Connection::open_raw(std::ptr::null())
+        }
     }
 
     /// Returns a pointer to the underlying XCB connection.
@@ -57,55 +61,42 @@ impl Connection {
 }
 
 impl Connection {
-    pub(crate) fn change_property<T: PropertyValue>(
-        &self, mode: ChangePropertyMode, window: u32, property: u32, ty: u32, value: &[T],
-    ) -> xcb_sys::xcb_void_cookie_t {
+    /// Thin wrapper around `xcb_change_property()`.
+    pub(crate) fn change_property<T: PropertyValue>(&self, mode: ChangePropertyMode, window: u32,
+                                                    property: u32, ty: u32, value: &[T])
+                                                    -> xcb_sys::xcb_void_cookie_t
+    {
         unsafe {
-            xcb_sys::xcb_change_property(
-                self.xcb,
-                mode as u8,
-                window,
-                property,
-                ty,
-                T::FORMAT,
-                u32::try_from(value.len()).unwrap(),
-                value.as_ptr() as *const _,
-            )
+            xcb_sys::xcb_change_property(self.xcb, mode as u8, window, property, ty, T::FORMAT,
+                                         u32::try_from(value.len()).unwrap(),
+                                         value.as_ptr() as *const _)
         }
     }
 
-    pub(crate) fn get_property(
-        &self, delete: bool, window: u32, property: u32, ty: u32, long_offset: u32, long_len: u32,
-    ) -> xcb_sys::xcb_get_property_cookie_t {
+    /// Thin wrapper around `xcb_get_property()`.
+    pub(crate) fn get_property(&self, delete: bool, window: u32, property: u32, ty: u32,
+                               long_offset: u32, long_len: u32)
+                               -> xcb_sys::xcb_get_property_cookie_t
+    {
         unsafe {
-            xcb_sys::xcb_get_property(
-                self.xcb,
-                delete as u8,
-                window,
-                property,
-                ty,
-                long_offset,
-                long_len,
-            )
+            xcb_sys::xcb_get_property(self.xcb, delete as u8, window, property, ty,
+                                      long_offset, long_len)
         }
     }
 
-    pub(crate) fn get_property_now(
-        &self, delete: bool, window: u32, property: u32, ty: u32, long_offset: u32, long_len: u32,
-    ) -> Result<GetPropertyReply> {
-        self.get_property_reply(self.get_property(
-            delete,
-            window,
-            property,
-            ty,
-            long_offset,
-            long_len,
-        ))
+    /// Sends an X_GetProperty request and immediately gets the reply.
+    pub(crate) fn get_property_now(&self, delete: bool, window: u32, property: u32, ty: u32,
+                                   long_offset: u32, long_len: u32)
+                                   -> Result<GetPropertyReply>
+    {
+        self.get_property_reply(self.get_property(delete, window, property, ty,
+                                                  long_offset, long_len))
     }
 
-    pub(crate) fn get_property_reply(
-        &self, cookie: xcb_sys::xcb_get_property_cookie_t,
-    ) -> Result<GetPropertyReply> {
+    /// Wrapper around `xcb_get_property_reply()` with error handling.
+    pub(crate) fn get_property_reply(&self, cookie: xcb_sys::xcb_get_property_cookie_t)
+        -> Result<GetPropertyReply>
+    {
         unsafe {
             let mut err_ptr = std::ptr::null_mut();
             let reply_ptr = xcb_sys::xcb_get_property_reply(self.xcb, cookie, &mut err_ptr);
@@ -126,9 +117,12 @@ impl Connection {
         }
     }
 
-    pub(crate) fn get_property_vec<T: PropertyValue>(
-        &self, window: u32, property: u32, ty: u32,
-    ) -> Result<Option<Vec<T>>> {
+    /// Gets the entire value of a variable-length window property. Attempts to do this using no
+    /// more than two requests, but will use more if the property changes from another thread or
+    /// client before this function finishes.
+    pub(crate) fn get_property_vec<T: PropertyValue>(&self, window: u32, property: u32, ty: u32)
+        -> Result<Option<Vec<T>>>
+    {
         let mut long_len = 0;
 
         loop {
@@ -143,24 +137,22 @@ impl Connection {
         }
     }
 
-    pub(crate) fn intern_atom<S: ?Sized + AsRef<[u8]>>(
-        &self, name: &S,
-    ) -> xcb_sys::xcb_intern_atom_cookie_t {
+    /// Thin wrapper around `xcb_intern_atom()`.
+    pub(crate) fn intern_atom<S: ?Sized + AsRef<[u8]>>(&self, name: &S)
+        -> xcb_sys::xcb_intern_atom_cookie_t
+    {
         let name = name.as_ref();
 
         unsafe {
-            xcb_sys::xcb_intern_atom(
-                self.xcb,
-                0,
-                u16::try_from(name.len()).unwrap(),
-                name.as_ptr() as *const c_char,
-            )
+            xcb_sys::xcb_intern_atom(self.xcb, 0, u16::try_from(name.len()).unwrap(),
+                                     name.as_ptr() as *const c_char)
         }
     }
 
-    pub(crate) fn intern_atom_reply(
-        &self, cookie: xcb_sys::xcb_intern_atom_cookie_t,
-    ) -> Result<u32> {
+    /// Wrapper around `xcb_intern_atom_reply()` with error handling.
+    pub(crate) fn intern_atom_reply(&self, cookie: xcb_sys::xcb_intern_atom_cookie_t)
+        -> Result<u32>
+    {
         unsafe {
             let mut err_ptr = std::ptr::null_mut();
             let reply_ptr = xcb_sys::xcb_intern_atom_reply(self.xcb, cookie, &mut err_ptr);
@@ -238,7 +230,7 @@ impl PartialEq for Connection {
     }
 }
 
-/// Mode used when changing a property.
+/// Determines how a property is changed.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Eq, PartialEq)]
 #[repr(u8)]
@@ -254,14 +246,18 @@ pub struct GetPropertyReply {
 }
 
 impl GetPropertyReply {
+    /// Returns true if the reply indicates a format of 0, which probably indicates that the
+    /// property does not exist.
     pub fn is_null(&self) -> bool {
         self.reply.format == 0
     }
 
+    /// Returns the length of the property in units determined by the format.
     pub fn len(&self) -> usize {
         usize::try_from(self.reply.length).unwrap()
     }
 
+    /// Attempts to get the property value as a slice. Fails if `T` is not the correct type.
     pub fn try_as_slice<T: PropertyValue>(&self) -> Result<&[T]> {
         if self.reply.format != T::FORMAT {
             return Err(err!(EncodingError("x window property format mismatch")));
@@ -270,13 +266,13 @@ impl GetPropertyReply {
         unsafe {
             Ok(std::slice::from_raw_parts(
                 xcb_sys::xcb_get_property_value((&*self.reply) as *const _) as *const T,
-                self.len(),
-            ))
+                self.len()))
         }
     }
 }
 
-/// Trait for window property values.
+/// Trait for window property values. The property format determines which values are allowed. This
+/// is implemented only for signed and unsigned integers of the indicated size.
 pub trait PropertyValue: Copy {
     const FORMAT: u8;
 }

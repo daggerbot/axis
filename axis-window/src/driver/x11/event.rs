@@ -23,15 +23,15 @@ impl<W: 'static + Clone> Context<W> {
         match (xevent.response_type & !0x80) as u32 {
             xcb_sys::XCB_CLIENT_MESSAGE => {
                 self.handle_client_message(
-                    unsafe { &(*(xevent_ptr as *const xcb_sys::xcb_client_message_event_t)) },
-                    f,
-                )?;
+                    unsafe { &(*(xevent_ptr as *const xcb_sys::xcb_client_message_event_t)) }, f)?;
             },
 
             xcb_sys::XCB_CONFIGURE_NOTIFY => {
                 let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_configure_notify_event_t) };
                 if let Some(window) = self.window_manager().borrow().get(ev.window) {
                     let size = Vector2::new(ev.width, ev.height);
+
+                    // Only emit a resize event if the size actually changed.
                     if window.update_size(size) {
                         f(Event::Resize {
                             window_id: window.id().clone(),
@@ -39,10 +39,10 @@ impl<W: 'static + Clone> Context<W> {
                         });
                     }
 
-                    // We'll get repeated configure notify events if a window manager is active.
-                    // The X server and the window manager will give us different values for the
-                    // window's current position. Let's filter the event and pick the one that we
-                    // actually want.
+                    // We'll usually get a pair of configure notify events if a window manager is
+                    // active: one from the X server and one from the window manager. Each will give
+                    // us a different value for the window's current position. Let's filter the
+                    // event and pick the one that we actually want.
                     let is_server_event = xevent.response_type & 0x80 == 0;
                     if is_server_event == window.is_parent_root() {
                         let pos = Vector2::new(ev.x, ev.y);
@@ -59,9 +59,7 @@ impl<W: 'static + Clone> Context<W> {
             xcb_sys::XCB_DESTROY_NOTIFY => {
                 let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_destroy_notify_event_t) };
                 if let Some(window) = self.window_manager().borrow_mut().expire(ev.window) {
-                    f(Event::Destroy {
-                        window_id: window.id().clone(),
-                    });
+                    f(Event::Destroy { window_id: window.id().clone() });
                 }
             },
 
@@ -80,6 +78,8 @@ impl<W: 'static + Clone> Context<W> {
             xcb_sys::XCB_REPARENT_NOTIFY => {
                 let ev = unsafe { *(xevent_ptr as *const xcb_sys::xcb_reparent_notify_event_t) };
                 if let Some(window) = self.window_manager().borrow().get(ev.window).cloned() {
+                    // We'll use this to determine if a window manager has taken control of the
+                    // window.
                     window.update_parent_xid(ev.parent);
                 }
             },
@@ -109,11 +109,12 @@ impl<W: 'static + Clone> Context<W> {
     ) -> Result<()> {
         if event.type_ == self.atoms().WM_PROTOCOLS && event.format == 32 {
             let protocol = unsafe { event.data.data32[0] };
+
+            // The name `WM_DELETE_WINDOW` is misleading. This is what we call a close request
+            // event.
             if protocol == self.atoms().WM_DELETE_WINDOW {
                 if let Some(window) = self.window_manager().borrow().get(event.window).cloned() {
-                    f(Event::Close {
-                        window_id: window.id().clone(),
-                    });
+                    f(Event::Close { window_id: window.id().clone() });
                 }
             }
         }

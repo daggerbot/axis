@@ -27,23 +27,14 @@ pub trait IDevice: 'static + Clone + Eq {
     fn pixel_formats(&self) -> <Self::Context as IContext>::PixelFormats;
 }
 
-/// Object trait for window system devices.
+/// Wrapper trait which allows an `IDevice` object to be boxed.
 pub trait IAnyDevice: Any {
     type WindowId: 'static + Clone;
 
-    /// Returns a reference to `self` as an [`Any`].
     fn any(&self) -> &dyn Any;
-
-    /// Returns the default pixel format for windows on this device.
     fn default_pixel_format(&self) -> PixelFormat;
-
-    /// Determines whether the two objects reference the same device.
     fn eq(&self, rhs: &dyn IAnyDevice<WindowId = Self::WindowId>) -> bool;
-
-    /// Returns a window builder.
     fn new_window(&self) -> WindowBuilder<Self::WindowId>;
-
-    /// Returns an iterator over all available pixel formats.
     fn pixel_formats(&self) -> PixelFormats;
 }
 
@@ -76,7 +67,7 @@ impl<T: IDevice> IAnyDevice for T {
     }
 }
 
-/// Boxed window system device type.
+/// Window system device type. This is a boxed wrapper around an [`IDevice`] object.
 #[derive(Clone)]
 pub struct Device<W: 'static + Clone>(pub(crate) Rc<dyn 'static + IAnyDevice<WindowId = W>>);
 
@@ -91,7 +82,7 @@ impl<W: 'static + Clone> Device<W> {
         self.0.new_window()
     }
 
-    /// Returns an iterator over all available pixel formats.
+    /// Returns an iterator over available pixel formats.
     pub fn pixel_formats(&self) -> PixelFormats {
         self.0.pixel_formats()
     }
@@ -105,7 +96,7 @@ impl<W: 'static + Clone> PartialEq for Device<W> {
     }
 }
 
-/// Boxed iterator over available window system devices.
+/// Iterator over available window system devices.
 pub struct Devices<W: 'static + Clone>(pub(crate) Box<dyn 'static + Iterator<Item = Device<W>>>);
 
 impl<W: 'static + Clone> Iterator for Devices<W> {

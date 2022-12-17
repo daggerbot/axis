@@ -28,8 +28,14 @@ mod wrapping_ops;
 pub use cmp::clamp;
 pub use complex::Complex;
 pub use convert::{
-    FromComposite, FromCompositeLossy, FromLossy, IntoComposite, IntoCompositeLossy, IntoLossy,
-    TryFromComposite, TryIntoComposite,
+    FromComposite,
+    FromCompositeLossy,
+    FromLossy,
+    IntoComposite,
+    IntoCompositeLossy,
+    IntoLossy,
+    TryFromComposite,
+    TryIntoComposite,
 };
 pub use error::{DivByZeroError, OverflowError, RangeError, UnderflowError};
 pub use num::{Continuous, Identity, IntLimits, Scalar, Zero};

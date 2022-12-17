@@ -12,13 +12,14 @@ use crate::driver::win32::error::Win32Error;
 use crate::driver::win32::window::WindowShared;
 use crate::error::Result;
 
-/// Wrapper around an `HDC` for a window.
+/// Wrapper around an `HDC` borrowed from a window.
 pub struct WindowDc<W: 'static + Clone> {
     hdc: winapi::shared::windef::HDC,
     window: Rc<WindowShared<W>>,
 }
 
 impl<W: 'static + Clone> WindowDc<W> {
+    /// Gets a window's DC.
     pub fn get(window: &Rc<WindowShared<W>>) -> Result<WindowDc<W>> {
         let hwnd = window.try_hwnd()?;
         let hdc;
@@ -37,6 +38,7 @@ impl<W: 'static + Clone> WindowDc<W> {
         })
     }
 
+    /// Returns the underlying handle.
     pub fn hdc(&self) -> winapi::shared::windef::HDC {
         self.hdc
     }

@@ -103,8 +103,8 @@ impl Bitmap {
     }
 }
 
+/// Constructs an owned bitmap from an image with a pixel type that implements `Into<bool>`.
 impl<'a, T: 'a + Into<bool>, I: 'a + Image<Pixel<'a> = T>> From<&'a I> for Bitmap {
-    /// Renders the source image as a `[Bitmap]`.
     fn from(src: &'a I) -> Bitmap {
         let size = src.size();
         let mut bitmap = Bitmap {
@@ -124,12 +124,14 @@ impl<'a, T: 'a + Into<bool>, I: 'a + Image<Pixel<'a> = T>> From<&'a I> for Bitma
                 if src.get_pixel(Vector2::new(x, y)).into() {
                     byte |= 1 << shift;
                 }
+
                 if shift == 0 {
                     bitmap.buf.push(byte);
                     byte = 0;
                     shift = 7;
+                } else {
+                    shift -= 1;
                 }
-                shift -= 1;
             }
 
             if shift != 7 {
