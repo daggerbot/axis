@@ -16,13 +16,13 @@ use crate::pixel_format::IPixelFormat;
 use crate::window::{IWindow, IWindowBuilder};
 
 /// Window system context trait.
-pub trait IContext: 'static + Sized {
-    type Device: IDevice<Context = Self>;
+pub trait ISystem: 'static + Sized {
+    type Device: IDevice<System = Self>;
     type Devices: Iterator<Item = Self::Device>;
     type PixelFormat: IPixelFormat;
     type PixelFormats: Iterator<Item = Self::PixelFormat>;
-    type Window: IWindow<Context = Self>;
-    type WindowBuilder: IWindowBuilder<Context = Self>;
+    type Window: IWindow<System = Self>;
+    type WindowBuilder: IWindowBuilder<System = Self>;
     type WindowId: 'static + Clone;
 
     /// Returns the default device.
@@ -35,8 +35,8 @@ pub trait IContext: 'static + Sized {
     fn run<F: Fn(Event<Self::WindowId>)>(&self, main_loop: &MainLoop, f: F) -> Result<()>;
 }
 
-/// Wrapper trait which allows an `IContext` object to be boxed.
-pub trait IAnyContext {
+/// Wrapper trait which allows an [`ISystem`] object to be boxed.
+pub trait IAnySystem {
     type WindowId: 'static + Clone;
 
     fn default_device(&self) -> Device<Self::WindowId>;
@@ -44,26 +44,26 @@ pub trait IAnyContext {
     fn run(&self, main_loop: &MainLoop, f: &dyn Fn(Event<Self::WindowId>)) -> Result<()>;
 }
 
-impl<T: IContext> IAnyContext for T {
-    type WindowId = <T as IContext>::WindowId;
+impl<T: ISystem> IAnySystem for T {
+    type WindowId = <T as ISystem>::WindowId;
 
     fn default_device(&self) -> Device<Self::WindowId> {
-        Device(Rc::new(IContext::default_device(self)))
+        Device(Rc::new(ISystem::default_device(self)))
     }
 
     fn devices(&self) -> Devices<Self::WindowId> {
-        Devices(Box::new(IContext::devices(self).map(|device| Device(Rc::new(device)))))
+        Devices(Box::new(ISystem::devices(self).map(|device| Device(Rc::new(device)))))
     }
 
     fn run(&self, main_loop: &MainLoop, f: &dyn Fn(Event<Self::WindowId>)) -> Result<()> {
-        IContext::run(self, main_loop, f)
+        ISystem::run(self, main_loop, f)
     }
 }
 
 /// Window system context type. This is a boxed wrapper around an [`IContext`] object.
-pub struct Context<W: 'static + Clone>(pub(crate) Box<dyn 'static + IAnyContext<WindowId = W>>);
+pub struct System<W: 'static + Clone>(pub(crate) Box<dyn 'static + IAnySystem<WindowId = W>>);
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     /// Returns the default device.
     pub fn default_device(&self) -> Device<W> {
         self.0.default_device()
@@ -76,16 +76,16 @@ impl<W: 'static + Clone> Context<W> {
 
     /// Opens a context for the default window system.
     #[allow(unreachable_code)]
-    pub fn open_default() -> Result<Context<W>> {
+    pub fn open_default() -> Result<System<W>> {
         #[cfg(all(feature = "win32-driver", target_os = "windows"))]
         {
-            return Ok(Context(Box::new(crate::driver::win32::Context::open()?)));
+            return Ok(System(Box::new(crate::driver::win32::System::open()?)));
         }
 
         #[cfg(x11_enabled)]
         {
-            return Ok(Context(Box::new(
-                crate::driver::x11::Context::open_default()?,
+            return Ok(System(Box::new(
+                crate::driver::x11::System::open_default()?,
             )));
         }
 
@@ -98,10 +98,10 @@ impl<W: 'static + Clone> Context<W> {
     }
 }
 
-impl<W: 'static + Clone, C: IContext<WindowId = W>> From<C> for Context<W> {
-    /// Constructs an opaque context.
-    fn from(inner: C) -> Context<W> {
-        Context(Box::new(inner))
+impl<W: 'static + Clone, C: ISystem<WindowId = W>> From<C> for System<W> {
+    /// Constructs an opaque window system context.
+    fn from(inner: C) -> System<W> {
+        System(Box::new(inner))
     }
 }
 

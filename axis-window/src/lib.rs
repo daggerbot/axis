@@ -31,20 +31,20 @@ mod macros;
 /// Contains code for window system drivers enable with their respective cargo features.
 pub mod driver;
 
-mod context;
 mod device;
 mod error;
 mod event;
 #[allow(dead_code)]
 mod ffi;
 mod pixel_format;
+mod system;
 mod window;
 
-pub use context::{Context, IContext, MainLoop};
 pub use device::{Device, Devices, IDevice};
 pub use error::{Error, ErrorKind, Result};
 pub use event::{Event, UpdateKind};
 pub use pixel_format::{IPixelFormat, PixelFormat, PixelFormats};
+pub use system::{ISystem, MainLoop, System};
 pub use window::{IWindow, IWindowBuilder, Window, WindowBuilder, WindowKind, WindowPos};
 
 /// Pixel coordinate type.

@@ -11,7 +11,6 @@ use std::iter::Once;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::context::{IContext, MainLoop};
 use crate::driver::win32::device::{Device, Devices};
 use crate::driver::win32::error::Win32Error;
 use crate::driver::win32::event::{EventHandler, EventManager};
@@ -19,21 +18,22 @@ use crate::driver::win32::pixel_format::PixelFormat;
 use crate::driver::win32::window::{Window, WindowBuilder};
 use crate::error::Result;
 use crate::event::{Event, UpdateKind};
+use crate::system::{ISystem, MainLoop};
 
 /// Context to the Win32 window system.
-pub struct Context<W: 'static + Clone> {
+pub struct System<W: 'static + Clone> {
     event_manager: Rc<EventManager<W>>,
     _phantom: PhantomData<W>,
     unique: Rc<()>,
 }
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     /// Opens a window system context for the current thread.
     ///
     /// It should be noted that multiple contexts may be opened on the same thread, but polling
     /// events from one may discard events for windows created by another.
-    pub fn open() -> Result<Context<W>> {
-        Ok(Context {
+    pub fn open() -> Result<System<W>> {
+        Ok(System {
             event_manager: Rc::new(EventManager::new()),
             _phantom: PhantomData,
             unique: Rc::new(()),
@@ -41,7 +41,7 @@ impl<W: 'static + Clone> Context<W> {
     }
 }
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     pub(crate) fn event_manager(&self) -> &Rc<EventManager<W>> {
         &self.event_manager
     }
@@ -53,7 +53,7 @@ impl<W: 'static + Clone> Context<W> {
     }
 }
 
-impl<W: 'static + Clone> IContext for Context<W> {
+impl<W: 'static + Clone> ISystem for System<W> {
     type Device = Device<W>;
     type Devices = Devices<W>;
     type PixelFormat = PixelFormat;
@@ -142,10 +142,10 @@ impl<W: 'static + Clone> IContext for Context<W> {
     }
 }
 
-impl<W: 'static + Clone> Eq for Context<W> {}
+impl<W: 'static + Clone> Eq for System<W> {}
 
-impl<W: 'static + Clone> PartialEq for Context<W> {
-    fn eq(&self, rhs: &Context<W>) -> bool {
+impl<W: 'static + Clone> PartialEq for System<W> {
+    fn eq(&self, rhs: &System<W>) -> bool {
         &*self.unique as *const () == &*rhs.unique as *const ()
     }
 }

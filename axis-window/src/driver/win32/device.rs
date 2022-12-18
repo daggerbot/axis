@@ -11,9 +11,9 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::device::IDevice;
-use crate::driver::win32::context::Context;
 use crate::driver::win32::event::EventManager;
 use crate::driver::win32::pixel_format::PixelFormat;
+use crate::driver::win32::system::System;
 use crate::driver::win32::window::WindowBuilder;
 
 /// Iterator over available Win32 window system devices (there is only one).
@@ -32,11 +32,11 @@ impl<W: 'static + Clone> Device<W> {
         &self.event_manager
     }
 
-    pub(crate) fn new(context: &Context<W>) -> Device<W> {
+    pub(crate) fn new(system: &System<W>) -> Device<W> {
         Device {
-            event_manager: context.event_manager().clone(),
+            event_manager: system.event_manager().clone(),
             _phantom: PhantomData,
-            unique: context.unique().clone(),
+            unique: system.unique().clone(),
         }
     }
 }
@@ -44,7 +44,7 @@ impl<W: 'static + Clone> Device<W> {
 impl<W: 'static + Clone> Eq for Device<W> {}
 
 impl<W: 'static + Clone> IDevice for Device<W> {
-    type Context = Context<W>;
+    type System = System<W>;
 
     fn default_pixel_format(&self) -> PixelFormat {
         PixelFormat::Default

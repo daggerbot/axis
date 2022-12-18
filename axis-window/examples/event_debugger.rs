@@ -10,9 +10,9 @@ extern crate axis_window as window;
 
 fn main() {
     // Initialize all of our window system objects.
-    let context: window::Context<()> =
-        window::Context::open_default().expect("can't open window system context");
-    let device = context.default_device();
+    let system: window::System<()> =
+        window::System::open_default().expect("can't open window system context");
+    let device = system.default_device();
     let window = device.new_window()
                        .visible()
                        .with_title("Event Debugger")
@@ -23,7 +23,7 @@ fn main() {
     let main_loop = window::MainLoop::new(window::UpdateKind::Passive);
 
     // Run our main loop.
-    context.run(&main_loop, |event| {
+    system.run(&main_loop, |event| {
         // Report the event.
         println!("{:?}", event);
 

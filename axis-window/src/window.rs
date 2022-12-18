@@ -8,8 +8,8 @@
 
 use math::Vector2;
 
-use crate::context::IContext;
 use crate::error::Result;
+use crate::system::ISystem;
 use crate::Coord;
 
 /// Determines the appearance and behavior of a window.
@@ -50,12 +50,12 @@ impl Default for WindowPos {
 /// platforms because some platforms may define their own properties that can be specified at
 /// creation time.
 pub trait IWindowBuilder {
-    type Context: IContext<WindowBuilder = Self>;
+    type System: ISystem<WindowBuilder = Self>;
 
     /// Builds a window and gives it an ID. The ID does not have to be unique, but it is the value
     /// that the library user will get back when receiving window events.
-    fn build(&self, id: <Self::Context as IContext>::WindowId)
-        -> Result<<Self::Context as IContext>::Window>;
+    fn build(&self, id: <Self::System as ISystem>::WindowId)
+        -> Result<<Self::System as ISystem>::Window>;
 
     /// Sets the initial window position.
     fn with_pos(&mut self, pos: WindowPos) -> &mut Self;
@@ -82,7 +82,7 @@ pub trait IAnyWindowBuilder {
 }
 
 impl<T: IWindowBuilder> IAnyWindowBuilder for T {
-    type WindowId = <T::Context as IContext>::WindowId;
+    type WindowId = <T::System as ISystem>::WindowId;
 
     fn build(&self, id: Self::WindowId) -> Result<Window<Self::WindowId>> {
         Ok(Window(Box::new(IWindowBuilder::build(self, id)?)))
@@ -150,13 +150,13 @@ impl<W: 'static + Clone> WindowBuilder<W> {
 
 /// Interface for top-level windows.
 pub trait IWindow {
-    type Context: IContext<Window = Self>;
+    type System: ISystem<Window = Self>;
 
     /// Destroys the window.
     fn destroy(&self);
 
     /// Returns the window ID.
-    fn id(&self) -> &<Self::Context as IContext>::WindowId;
+    fn id(&self) -> &<Self::System as ISystem>::WindowId;
 
     /// Returns true if the window is still alive (to the best of our current knowledge).
     fn is_alive(&self) -> bool;
@@ -204,7 +204,7 @@ pub trait IAnyWindow {
 }
 
 impl<T: IWindow> IAnyWindow for T {
-    type WindowId = <T::Context as IContext>::WindowId;
+    type WindowId = <T::System as ISystem>::WindowId;
 
     fn destroy(&self) {
         IWindow::destroy(self);

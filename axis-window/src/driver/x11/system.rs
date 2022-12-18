@@ -10,7 +10,6 @@ use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::context::{IContext, MainLoop};
 use crate::driver::x11::connection::Connection;
 use crate::driver::x11::device::{Device, Devices};
 use crate::driver::x11::pixel_format::{PixelFormat, PixelFormats};
@@ -18,6 +17,7 @@ use crate::driver::x11::window::{Window, WindowBuilder, WindowManager};
 use crate::error::Result;
 use crate::event::{Event, UpdateKind};
 use crate::ffi::CBox;
+use crate::system::{ISystem, MainLoop};
 
 /// Macro which defines our `Atoms` struct. As the list of atoms we use grows, doing this by hand
 /// would become repetative and error-prone.
@@ -52,7 +52,7 @@ atoms! {
 }
 
 /// X11 window system context.
-pub struct Context<W: 'static + Clone> {
+pub struct System<W: 'static + Clone> {
     atoms: Rc<Atoms>,
     connection: Rc<Connection>,
     _phantom: PhantomData<W>,
@@ -60,24 +60,24 @@ pub struct Context<W: 'static + Clone> {
     xcb: *mut xcb_sys::xcb_connection_t,
 }
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     /// Returns the underlying X connection.
     pub fn connection(&self) -> &Rc<Connection> {
         &self.connection
     }
 
     /// Opens a connection to the specified X server.
-    pub fn open<S: Into<Vec<u8>>>(name: S) -> Result<Context<W>> {
-        Context::init(Connection::open(name)?)
+    pub fn open<S: Into<Vec<u8>>>(name: S) -> Result<System<W>> {
+        System::init(Connection::open(name)?)
     }
 
     /// Opens a connectoin to the default X server.
-    pub fn open_default() -> Result<Context<W>> {
-        Context::init(Connection::open_default()?)
+    pub fn open_default() -> Result<System<W>> {
+        System::init(Connection::open_default()?)
     }
 }
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     pub(crate) fn atoms(&self) -> &Rc<Atoms> {
         &self.atoms
     }
@@ -87,7 +87,7 @@ impl<W: 'static + Clone> Context<W> {
     }
 }
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     /// Safe wrapper around `xcb_flush()` with error checking.
     fn flush(&self) -> Result<()> {
         unsafe {
@@ -100,9 +100,9 @@ impl<W: 'static + Clone> Context<W> {
     }
 }
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     /// Performs any initialization on the context that occurs after the connection is obtained.
-    fn init(connection: Connection) -> Result<Context<W>> {
+    fn init(connection: Connection) -> Result<System<W>> {
         #[cfg(feature = "x11-sys")]
         unsafe {
             // We'll use XCB to poll events.
@@ -113,7 +113,7 @@ impl<W: 'static + Clone> Context<W> {
         let atoms = Atoms::init(&connection)?;
         let xcb = connection.xcb_connection_ptr();
 
-        Ok(Context {
+        Ok(System {
             atoms: Rc::new(atoms),
             connection: Rc::new(connection),
             _phantom: PhantomData,
@@ -123,9 +123,9 @@ impl<W: 'static + Clone> Context<W> {
     }
 }
 
-impl<W: 'static + Clone> Eq for Context<W> {}
+impl<W: 'static + Clone> Eq for System<W> {}
 
-impl<W: 'static + Clone> IContext for Context<W> {
+impl<W: 'static + Clone> ISystem for System<W> {
     type Device = Device<W>;
     type Devices = Devices<W>;
     type PixelFormat = PixelFormat;
@@ -198,8 +198,8 @@ impl<W: 'static + Clone> IContext for Context<W> {
     }
 }
 
-impl<W: 'static + Clone> PartialEq for Context<W> {
-    fn eq(&self, rhs: &Context<W>) -> bool {
+impl<W: 'static + Clone> PartialEq for System<W> {
+    fn eq(&self, rhs: &System<W>) -> bool {
         self.connection == rhs.connection
     }
 }

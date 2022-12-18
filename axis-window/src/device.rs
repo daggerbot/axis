@@ -9,22 +9,22 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use crate::context::IContext;
 use crate::pixel_format::{PixelFormat, PixelFormats};
+use crate::system::ISystem;
 use crate::window::WindowBuilder;
 
 /// Trait for window system devices.
 pub trait IDevice: 'static + Clone + Eq {
-    type Context: IContext<Device = Self>;
+    type System: ISystem<Device = Self>;
 
     /// Returns the default pixel format for windows on this device.
-    fn default_pixel_format(&self) -> <Self::Context as IContext>::PixelFormat;
+    fn default_pixel_format(&self) -> <Self::System as ISystem>::PixelFormat;
 
     /// Constructs a window builder.
-    fn new_window(&self) -> <Self::Context as IContext>::WindowBuilder;
+    fn new_window(&self) -> <Self::System as ISystem>::WindowBuilder;
 
     /// Returns an iterator over all available pixel formats.
-    fn pixel_formats(&self) -> <Self::Context as IContext>::PixelFormats;
+    fn pixel_formats(&self) -> <Self::System as ISystem>::PixelFormats;
 }
 
 /// Wrapper trait which allows an `IDevice` object to be boxed.
@@ -39,7 +39,7 @@ pub trait IAnyDevice: Any {
 }
 
 impl<T: IDevice> IAnyDevice for T {
-    type WindowId = <T::Context as IContext>::WindowId;
+    type WindowId = <T::System as ISystem>::WindowId;
 
     fn any(&self) -> &dyn Any {
         self

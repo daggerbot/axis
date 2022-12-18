@@ -7,14 +7,14 @@
  */
 
 mod connection;
-mod context;
 mod device;
 mod event;
 mod pixel_format;
+mod system;
 mod window;
 
 pub use self::connection::Connection;
-pub use self::context::Context;
 pub use self::device::{Device, Devices};
 pub use self::pixel_format::{PixelFormat, PixelFormats};
+pub use self::system::System;
 pub use self::window::{Window, WindowBuilder};

@@ -15,13 +15,13 @@ use std::sync::{Arc, Mutex};
 
 use math::{IntoLossy, Vector2};
 
-use crate::driver::win32::context::Context;
 use crate::driver::win32::device::Device;
 use crate::driver::win32::error::{Win32Error, clear_last_error};
 use crate::driver::win32::event::EventManager;
 use crate::driver::win32::ffi::get_exe_handle;
 use crate::driver::win32::gdi::WindowDc;
 use crate::driver::win32::pixel_format::PixelFormat;
+use crate::driver::win32::system::System;
 use crate::error::{ErrorKind, Result};
 use crate::window::{IWindow, IWindowBuilder, WindowKind, WindowPos};
 use crate::Coord;
@@ -54,7 +54,7 @@ impl<W: 'static + Clone> WindowBuilder<W> {
 }
 
 impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
-    type Context = Context<W>;
+    type System = System<W>;
 
     fn build(&self, id: W) -> Result<Window<W>> {
         let class_name_ptr = WINDOW_CLASS_MANAGER.lock()?.register::<W>()?;
@@ -310,7 +310,7 @@ impl<W: 'static + Clone> Drop for Window<W> {
 }
 
 impl<W: 'static + Clone> IWindow for Window<W> {
-    type Context = Context<W>;
+    type System = System<W>;
 
     fn destroy(&self) {
         self.shared.destroy();

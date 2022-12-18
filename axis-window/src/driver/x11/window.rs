@@ -14,9 +14,9 @@ use math::{TryFromComposite, Vector2};
 
 use crate::device::IDevice;
 use crate::driver::x11::connection::{ChangePropertyMode, Connection, PropertyValue};
-use crate::driver::x11::context::{Atoms, Context};
 use crate::driver::x11::device::Device;
 use crate::driver::x11::pixel_format::PixelFormat;
+use crate::driver::x11::system::{Atoms, System};
 use crate::error::Result;
 use crate::window::{IWindow, IWindowBuilder, WindowPos};
 use crate::Coord;
@@ -59,7 +59,7 @@ impl<W: 'static + Clone> WindowBuilder<W> {
 }
 
 impl<W: 'static + Clone> IWindowBuilder for WindowBuilder<W> {
-    type Context = Context<W>;
+    type System = System<W>;
 
     fn build(&self, id: W) -> Result<Window<W>> {
         let connection = self.device.connection().clone();
@@ -300,7 +300,7 @@ impl<W: 'static + Clone> Drop for Window<W> {
 }
 
 impl<W: 'static + Clone> IWindow for Window<W> {
-    type Context = Context<W>;
+    type System = System<W>;
 
     fn destroy(&self) {
         if let Some(xid) = self.shared.xid.take() {

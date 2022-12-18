@@ -12,8 +12,8 @@ use std::rc::Rc;
 
 use crate::device::IDevice;
 use crate::driver::x11::connection::Connection;
-use crate::driver::x11::context::{Atoms, Context};
 use crate::driver::x11::pixel_format::{PixelFormat, PixelFormats};
+use crate::driver::x11::system::{Atoms, System};
 use crate::driver::x11::window::{WindowBuilder, WindowManager};
 
 /// X11 window system type which corresponds to an X "screen".
@@ -67,7 +67,7 @@ impl<W: 'static + Clone> Device<W> {
 impl<W: 'static + Clone> Eq for Device<W> {}
 
 impl<W: 'static + Clone> IDevice for Device<W> {
-    type Context = Context<W>;
+    type System = System<W>;
 
     fn default_pixel_format(&self) -> PixelFormat {
         let visual_id = self.root_visual_id();
@@ -105,18 +105,18 @@ pub struct Devices<W: 'static + Clone> {
 }
 
 impl<W: 'static + Clone> Devices<W> {
-    pub(crate) fn new(context: &Context<W>) -> Devices<W> {
-        let connection = context.connection().clone();
+    pub(crate) fn new(system: &System<W>) -> Devices<W> {
+        let connection = system.connection().clone();
         let xcb = connection.xcb_connection_ptr();
 
         unsafe {
             Devices {
-                atoms: context.atoms().clone(),
+                atoms: system.atoms().clone(),
                 connection,
                 iter: xcb_sys::xcb_setup_roots_iterator(xcb_sys::xcb_get_setup(xcb)),
                 _phantom_data: PhantomData,
                 screen_index: 0,
-                window_manager: context.window_manager().clone(),
+                window_manager: system.window_manager().clone(),
             }
         }
     }

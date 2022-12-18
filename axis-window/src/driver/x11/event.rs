@@ -8,12 +8,12 @@
 
 use math::{FromComposite, Vector2};
 
-use crate::driver::x11::context::Context;
+use crate::driver::x11::system::System;
 use crate::error::Result;
 use crate::event::Event;
 use crate::ffi::CBox;
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     pub(crate) fn handle_event<F: Fn(Event<W>)>(
         &self, xevent: CBox<xcb_sys::xcb_generic_event_t>, f: &F,
     ) -> Result<()> {
@@ -103,7 +103,7 @@ impl<W: 'static + Clone> Context<W> {
     }
 }
 
-impl<W: 'static + Clone> Context<W> {
+impl<W: 'static + Clone> System<W> {
     fn handle_client_message<F: Fn(Event<W>)>(
         &self, event: &xcb_sys::xcb_client_message_event_t, f: &F,
     ) -> Result<()> {
