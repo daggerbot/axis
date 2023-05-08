@@ -1,0 +1,7 @@
+# Ignore dotfiles unless otherwise specified
+.*
+!.gitignore
+
+# Ignore cargo build files
+/Cargo.lock
+/target/
